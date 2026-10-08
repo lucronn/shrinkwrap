@@ -1,6 +1,6 @@
 """
 Command-Line Interface for ShrinkWrap.
-Supports commands: wrap-stdio, status, benchmark, gap-report, install, wrap, rollback.
+Supports commands: wrap-stdio, status, gain, stats, benchmark, gap-report, install, wrap, rollback.
 """
 
 import sys
@@ -11,7 +11,73 @@ from shrinkwrap.benchmarks.runner import run_benchmark_suite
 from shrinkwrap.gap_report.gap_report import generate_gap_report
 from shrinkwrap.proxy.config_manager import ConfigManager
 from shrinkwrap.proxy.stdio_proxy import StdioMCPProxy
+from shrinkwrap.engine.tracker import global_tracker
 from shrinkwrap import __version__, __coverage_status__, __universal_status__
+
+def print_gain_report(history: bool = False, reset: bool = False):
+    if reset:
+        global_tracker.reset()
+        print("✅ ShrinkWrap token analytics store reset successfully.")
+        return
+
+    stats = global_tracker.get_stats()
+    totals = stats.get("totals", {})
+
+    orig_t = totals.get("original_tokens", 0)
+    comp_t = totals.get("compacted_tokens", 0)
+    saved_t = totals.get("tokens_saved", 0)
+    orig_b = totals.get("original_bytes", 0)
+    comp_b = totals.get("compacted_bytes", 0)
+    saved_b = totals.get("bytes_saved", 0)
+    invocations = totals.get("total_invocations", 0)
+    compacted_inv = totals.get("compacted_invocations", 0)
+    usd_saved = totals.get("est_usd_saved", 0.0)
+
+    savings_pct = round((saved_t / orig_t * 100), 2) if orig_t > 0 else 0.0
+    byte_savings_pct = round((saved_b / orig_b * 100), 2) if orig_b > 0 else 0.0
+
+    print("📊 ShrinkWrap Token Savings & Gain Report")
+    print("=" * 60)
+    print(f"Total Invocations:      {invocations:,} ({compacted_inv:,} compacted)")
+    print(f"Original Tokens:        {orig_t:,}")
+    print(f"Compacted Tokens:       {comp_t:,}")
+    print(f"Tokens Saved:           {saved_t:,} ({savings_pct}% token reduction)")
+    print(f"Bytes Saved:            {saved_b:,} bytes ({byte_savings_pct}% byte reduction)")
+    print(f"Est. Financial Savings: ${usd_saved:,.4f} USD (@ $3.00/1M tokens)")
+    print("=" * 60)
+
+    # Per Harness / Agent Breakdown
+    by_harness = stats.get("by_harness", {})
+    if by_harness:
+        print("\n🤖 Breakdown by Agent / Harness:")
+        print(f"{'Harness/Agent':<20} {'Invocations':<14} {'Tokens Saved':<16} {'Savings %'}")
+        print("-" * 60)
+        for h_name, h_data in by_harness.items():
+            h_orig = h_data.get("orig_tokens", 0)
+            h_saved = h_data.get("tokens_saved", 0)
+            h_pct = round((h_saved / h_orig * 100), 2) if h_orig > 0 else 0.0
+            print(f"{h_name:<20} {h_data.get('invocations', 0):<14} {h_saved:<16,} {h_pct}%")
+
+    # Per Tool Breakdown
+    by_tool = stats.get("by_tool", {})
+    if by_tool:
+        print("\n🔧 Breakdown by Tool / MCP Server:")
+        print(f"{'Tool Name':<20} {'Invocations':<14} {'Tokens Saved':<16} {'Savings %'}")
+        print("-" * 60)
+        for t_name, t_data in by_tool.items():
+            t_orig = t_data.get("orig_tokens", 0)
+            t_saved = t_data.get("tokens_saved", 0)
+            t_pct = round((t_saved / t_orig * 100), 2) if t_orig > 0 else 0.0
+            print(f"{t_name:<20} {t_data.get('invocations', 0):<14} {t_saved:<16,} {t_pct}%")
+
+    # History Log
+    if history:
+        hist = stats.get("history", [])
+        print("\n📜 Recent Invocation History (Last 20 Invocations):")
+        print(f"{'Timestamp':<20} {'Harness':<14} {'Tool':<16} {'Strategy':<20} {'Saved'}")
+        print("-" * 80)
+        for entry in hist[:20]:
+            print(f"{entry.get('timestamp', ''):<20} {entry.get('harness', ''):<14} {entry.get('tool', ''):<16} {entry.get('strategy', ''):<20} {entry.get('tokens_saved', 0):,} ({entry.get('savings_pct', 0.0)}%)")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -26,6 +92,15 @@ def main():
 
     # status
     subparsers.add_parser("status", help="Show ShrinkWrap coverage status and active adapters")
+
+    # gain / stats
+    gain_p = subparsers.add_parser("gain", help="Display token savings analytics and financial gains")
+    gain_p.add_argument("--history", action="store_true", help="Show recent invocation event log")
+    gain_p.add_argument("--reset", action="store_true", help="Reset analytics storage database")
+
+    stats_p = subparsers.add_parser("stats", help="Alias for shrinkwrap gain")
+    stats_p.add_argument("--history", action="store_true", help="Show recent invocation event log")
+    stats_p.add_argument("--reset", action="store_true", help="Reset analytics storage database")
 
     # benchmark
     subparsers.add_parser("benchmark", help="Run token compaction benchmark suite")
@@ -64,6 +139,9 @@ def main():
         print(f"Universal Gate:    {__universal_status__}")
         print("Active Adapters:   shell, stdio_mcp_proxy, http_mcp_proxy")
 
+    elif args.subcommand in ("gain", "stats"):
+        print_gain_report(history=args.history, reset=args.reset)
+
     elif args.subcommand == "benchmark":
         res = run_benchmark_suite()
         s = res["summary"]
@@ -74,10 +152,10 @@ def main():
         print(f"Token Savings:       {s['overall_token_savings_pct']}%")
         print(f"Byte Savings:        {s['overall_byte_savings_pct']}%")
         print(f"Total Execution:     {s['execution_time_ms']} ms\n")
-        print(f"{'Case Name':<16} {'Source':<14} {'Strategy':<20} {'Orig Tok':<10} {'Comp Tok':<10} {'Savings'}")
-        print("-" * 80)
+        print(f"{'Case Name':<25} {'Source':<14} {'Strategy':<20} {'Orig Tok':<10} {'Comp Tok':<10} {'Savings'}")
+        print("-" * 90)
         for c in res["cases"]:
-            print(f"{c['name']:<16} {c['source']:<14} {c['strategy']:<20} {c['orig_tokens']:<10} {c['comp_tokens']:<10} {c['savings_pct']}%")
+            print(f"{c['name']:<25} {c['source']:<14} {c['strategy']:<20} {c['orig_tokens']:<10} {c['comp_tokens']:<10} {c['savings_pct']}%")
 
     elif args.subcommand == "gap-report":
         print(generate_gap_report())

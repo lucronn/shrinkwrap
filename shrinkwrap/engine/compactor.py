@@ -8,18 +8,32 @@ from typing import Dict, Any, Tuple
 from shrinkwrap.engine.tokenizer import estimate_tokens
 from shrinkwrap.engine.privacy import SecretRedactor
 from shrinkwrap.engine.retrieval_buffer import global_buffer
+from shrinkwrap.engine.tracker import global_tracker
+
 
 class CompactionEngine:
-    def __init__(self, token_threshold: int = 400, secret_redactor: SecretRedactor = None):
+    def __init__(self, token_threshold: int = 400, secret_redactor: SecretRedactor = None, record_stats: bool = True):
         self.token_threshold = token_threshold
         self.redactor = secret_redactor or SecretRedactor()
+        self.record_stats = record_stats
 
-    def compact(self, raw_input: Any, source_type: str = "generic") -> Tuple[Any, str, int, int]:
+    def compact(self, raw_input: Any, source_type: str = "generic", tool_name: str = "generic_tool") -> Tuple[Any, str, int, int]:
         raw_str = json.dumps(raw_input) if isinstance(raw_input, (dict, list)) else str(raw_input)
         sanitized_str = self.redactor.sanitize(raw_str)
         orig_tokens = estimate_tokens(sanitized_str)
+        orig_bytes = len(raw_str.encode("utf-8"))
 
         if orig_tokens <= self.token_threshold:
+            if self.record_stats:
+                global_tracker.record_event(
+                    orig_tokens=orig_tokens,
+                    comp_tokens=orig_tokens,
+                    orig_bytes=orig_bytes,
+                    comp_bytes=orig_bytes,
+                    source_class=source_type,
+                    tool_name=tool_name,
+                    strategy="pass_through"
+                )
             return (raw_input, "pass_through", orig_tokens, orig_tokens)
 
         # Store in volatile retrieval buffer
@@ -32,8 +46,21 @@ class CompactionEngine:
 
         compact_str = json.dumps(compacted_obj) if isinstance(compacted_obj, (dict, list)) else str(compacted_obj)
         comp_tokens = estimate_tokens(compact_str)
+        comp_bytes = len(compact_str.encode("utf-8"))
+
+        if self.record_stats:
+            global_tracker.record_event(
+                orig_tokens=orig_tokens,
+                comp_tokens=comp_tokens,
+                orig_bytes=orig_bytes,
+                comp_bytes=comp_bytes,
+                source_class=source_type,
+                tool_name=tool_name,
+                strategy=strategy
+            )
 
         return (compacted_obj, strategy, orig_tokens, comp_tokens)
+
 
     def _compact_json(self, data: Any, ref_handle: str) -> Tuple[Dict[str, Any], str]:
         if isinstance(data, list):

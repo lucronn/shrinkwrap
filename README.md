@@ -105,7 +105,21 @@ shrinkwrap install --dry-run
 shrinkwrap install
 ```
 
+### Monitor Token Gains & Savings
+View cumulative token reductions, byte savings, financial USD gain, and breakdowns per AI agent/harness:
+```bash
+# View token gain report & breakdown by agent
+shrinkwrap gain
+
+# View recent invocation event log
+shrinkwrap gain --history
+
+# Reset analytics store
+shrinkwrap gain --reset
+```
+
 ### 1-Click Safety Rollback
+
 Restore your original MCP client configuration at any time:
 ```bash
 shrinkwrap rollback ~/.codex/config.json
