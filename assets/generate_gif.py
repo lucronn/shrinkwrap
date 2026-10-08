@@ -23,8 +23,12 @@ try:
 except Exception:
     font = font_bold = font_title = ImageFont.load_default()
 
+def truncate_text(text: str, max_chars: int = 38) -> str:
+    return text[:max_chars] if len(text) > max_chars else text
+
 def create_terminal_window(width, height, title, render_content_fn, frame_idx):
-    win = Image.new("RGBA", (width, height), color=TERM_BG)
+    # Base terminal window canvas
+    win = Image.new("RGB", (width, height), color=TERM_BG)
     draw = ImageDraw.Draw(win)
 
     # Header bar
@@ -33,19 +37,22 @@ def create_terminal_window(width, height, title, render_content_fn, frame_idx):
     draw.ellipse([10, 9, 18, 17], fill=(255, 95, 86))
     draw.ellipse([24, 9, 32, 17], fill=(255, 189, 46))
     draw.ellipse([38, 9, 46, 17], fill=(39, 201, 63))
-    draw.text((55, 6), title, fill=TEXT_DIM, font=font)
+    draw.text((55, 6), truncate_text(title, 34), fill=TEXT_DIM, font=font)
 
     # Inner body sub-canvas for strictly clipped content
-    body_w = width - 20
-    body_h = height - 40
-    body = Image.new("RGBA", (body_w, body_h), color=TERM_BG)
+    body_w = width - 16
+    body_h = height - 36
+    body = Image.new("RGB", (body_w, body_h), color=TERM_BG)
     b_draw = ImageDraw.Draw(body)
 
     # Render inner content onto body
     render_content_fn(b_draw, body_w, body_h, frame_idx)
 
+    # Strictly crop body to ensure no pixel bleed
+    body_cropped = body.crop((0, 0, body_w, body_h))
+
     # Paste body onto terminal window
-    win.paste(body, (10, 32))
+    win.paste(body_cropped, (8, 30))
     draw.rectangle([0, 0, width - 1, height - 1], outline=BORDER_COLOR, width=1)
     return win
 
@@ -54,11 +61,11 @@ def render_left_content(draw, w, h, frame_idx):
     draw.text((5, y), "user@agent:~$ ", fill=TEXT_PROMPT, font=font)
     cmd = "mcp-query postgres --limit 500"
     typed_len = min(len(cmd), frame_idx * 3)
-    draw.text((95, y), cmd[:typed_len], fill=TEXT_CMD, font=font)
+    draw.text((95, y), truncate_text(cmd[:typed_len], 30), fill=TEXT_CMD, font=font)
 
     if frame_idx > 5:
         y += 20
-        draw.text((5, y), "[UNCOMPACTED RAW PAYLOAD FLOODING CONTEXT]", fill=TEXT_RED, font=font_bold)
+        draw.text((5, y), truncate_text("[RAW PAYLOAD FLOODING CONTEXT]", 36), fill=TEXT_RED, font=font_bold)
         y += 18
         draw.text((5, y), "[", fill=TEXT_WHITE, font=font)
 
@@ -66,23 +73,23 @@ def render_left_content(draw, w, h, frame_idx):
         for i in range(11):
             idx = i + scroll_offset
             y += 16
-            line = f'  {{ "id": {idx:03d}, "user": "usr_{idx%50}", "amt": {14.99+idx*2.5:.2f} }},'
-            draw.text((5, y), line, fill=TEXT_DIM, font=font)
+            line = f'  {{ "id": {idx:03d}, "usr": "u_{idx%50}", "amt": {14.99+idx*2.5:.2f} }},'
+            draw.text((5, y), truncate_text(line, 38), fill=TEXT_DIM, font=font)
 
         y += 22
         draw.rectangle([5, y, w - 5, y + 26], fill=(50, 20, 20), outline=TEXT_RED)
-        draw.text((12, y + 5), "❌ CONTEXT CONSUMED: 28,743 TOKENS", fill=TEXT_RED, font=font_bold)
+        draw.text((10, y + 5), truncate_text("❌ CONTEXT: 28,743 TOKENS", 34), fill=TEXT_RED, font=font_bold)
 
 def render_right_content(draw, w, h, frame_idx):
     y = 5
     draw.text((5, y), "user@agent:~$ ", fill=TEXT_PROMPT, font=font)
     cmd = "mcp-query postgres --limit 500"
     typed_len = min(len(cmd), frame_idx * 3)
-    draw.text((95, y), cmd[:typed_len], fill=TEXT_CMD, font=font)
+    draw.text((95, y), truncate_text(cmd[:typed_len], 30), fill=TEXT_CMD, font=font)
 
     if frame_idx > 5:
         y += 20
-        draw.text((5, y), "[SHRINKWRAP COMPACTED PAYLOAD - 99.38% SAVED]", fill=TEXT_GREEN, font=font_bold)
+        draw.text((5, y), truncate_text("[COMPACTED PAYLOAD - 99.38% SAVED]", 36), fill=TEXT_GREEN, font=font_bold)
         y += 18
 
         json_lines = [
@@ -90,23 +97,23 @@ def render_right_content(draw, w, h, frame_idx):
             ('  "_shrinkwrap_summary": true,', TEXT_KEY),
             ('  "type": "array",', TEXT_KEY),
             ('  "item_count": 500,', TEXT_KEY),
-            ('  "schema_keys": ["id", "user", "amt"],', TEXT_KEY),
+            ('  "schema_keys": ["id", "usr", "amt"],', TEXT_KEY),
             ('  "sample_items": [', TEXT_KEY),
-            ('    { "id": 0, "user": "usr_0", "amt": 14.99 }', TEXT_DIM),
+            ('    { "id": 0, "usr": "u_0", "amt": 14.99 }', TEXT_DIM),
             ('  ],', TEXT_KEY),
             ('  "ref_handle": "sw-ref:128239de1eb2"', TEXT_VAL),
             ('}', TEXT_WHITE)
         ]
         for line, col in json_lines:
-            draw.text((5, y), line, fill=col, font=font)
+            draw.text((5, y), truncate_text(line, 38), fill=col, font=font)
             y += 16
 
         y += 14
         draw.rectangle([5, y, w - 5, y + 26], fill=(20, 45, 25), outline=TEXT_GREEN)
-        draw.text((12, y + 5), "✅ CONTEXT INGESTED: 178 TOKENS (Lossless)", fill=TEXT_GREEN, font=font_bold)
+        draw.text((10, y + 5), truncate_text("✅ CONTEXT: 178 TOKENS (Lossless)", 34), fill=TEXT_GREEN, font=font_bold)
 
 frames = []
-w_win = 460
+w_win = 450
 h_win = 420
 
 for frame_idx in range(TOTAL_FRAMES):
@@ -114,15 +121,15 @@ for frame_idx in range(TOTAL_FRAMES):
     draw = ImageDraw.Draw(img)
 
     # Title
-    draw.text((WIDTH // 2 - 150, 14), "ShrinkWrap Live Execution Comparison", fill=TEXT_PROMPT, font=font_title)
+    draw.text((WIDTH // 2 - 140, 14), "ShrinkWrap Live Execution Comparison", fill=TEXT_PROMPT, font=font_title)
 
-    # Render left & right windows with identical commands and strict clipping
+    # Render left & right windows with strict truncation & sub-canvas cropping
     win_left = create_terminal_window(w_win, h_win, "BEFORE: 28,743 Tokens (Raw Payload)", render_left_content, frame_idx)
     win_right = create_terminal_window(w_win, h_win, "AFTER: 178 Tokens (99.38% Saved)", render_right_content, frame_idx)
 
-    # Paste left and right terminal windows
-    img.paste(win_left, (25, 45))
-    img.paste(win_right, (515, 45))
+    # Paste left window at x=30, right window at x=520 (90px margin between windows)
+    img.paste(win_left, (30, 45))
+    img.paste(win_right, (520, 45))
 
     frames.append(img)
 
@@ -134,4 +141,4 @@ frames[0].save(
     duration=90,
     loop=0
 )
-print("Pixel-perfect identical-command clipped GIF generated: assets/terminal_demo.gif")
+print("Strictly truncated & cropped GIF generated: assets/terminal_demo.gif")
