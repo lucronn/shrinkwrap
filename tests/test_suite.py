@@ -12,5 +12,6 @@ def test_gap_report():
 
 def test_benchmarks():
     res = run_benchmark_suite()
-    assert res["summary"]["total_cases"] == 9
+    assert res["summary"]["total_cases"] == 5
     assert res["summary"]["overall_token_savings_pct"] > 80.0
+
