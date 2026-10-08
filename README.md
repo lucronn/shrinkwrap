@@ -95,7 +95,8 @@ ShrinkWrap features a built-in `SecretRedactor` pipeline. Before any tool payloa
 ```bash
 pip install shrinkwrap-mcp
 ```
-*(Or install locally for development: `git clone https://github.com/shrinkwrap-mcp/shrinkwrap.git && cd shrinkwrap && pip install -e .`)*
+*(Or install locally for development: `git clone https://github.com/lucronn/shrinkwrap.git && cd shrinkwrap && pip install -e .`)*
+
 
 ### 2. Auto-Wrap Active MCP Servers
 Automatically discover and wrap your local MCP server configurations (`~/.codex/config.json`, Claude Desktop, Cursor):

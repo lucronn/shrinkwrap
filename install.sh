@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ShrinkWrap Automated Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/shrinkwrap-mcp/shrinkwrap/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/lucronn/shrinkwrap/main/install.sh | bash
+
 
 set -e
 
