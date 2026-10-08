@@ -1,9 +1,10 @@
 """
 Command-Line Interface for ShrinkWrap.
-Supports commands: wrap-stdio, status, gain, stats, benchmark, gap-report, install, wrap, rollback.
+Command reference: wrap-stdio, status, gain, stats, benchmark, fetch, gap-report, install, wrap, rollback.
 """
 
 import sys
+import json
 import asyncio
 import argparse
 from pathlib import Path
@@ -12,12 +13,13 @@ from shrinkwrap.gap_report.gap_report import generate_gap_report
 from shrinkwrap.proxy.config_manager import ConfigManager
 from shrinkwrap.proxy.stdio_proxy import StdioMCPProxy
 from shrinkwrap.engine.tracker import global_tracker
+from shrinkwrap.engine.retrieval_buffer import global_buffer
 from shrinkwrap import __version__, __coverage_status__, __universal_status__
 
-def print_gain_report(history: bool = False, reset: bool = False):
+def print_gain_report(history: bool = False, reset: bool = False, output_json: bool = False):
     if reset:
         global_tracker.reset()
-        print("✅ ShrinkWrap token analytics store reset successfully.")
+        print("ShrinkWrap token analytics store reset successfully.")
         return
 
     stats = global_tracker.get_stats()
@@ -36,20 +38,23 @@ def print_gain_report(history: bool = False, reset: bool = False):
     savings_pct = round((saved_t / orig_t * 100), 2) if orig_t > 0 else 0.0
     byte_savings_pct = round((saved_b / orig_b * 100), 2) if orig_b > 0 else 0.0
 
-    print("📊 ShrinkWrap Token Savings & Gain Report")
+    if output_json:
+        print(json.dumps(stats, indent=2))
+        return
+
+    print("ShrinkWrap Token Analytics Report")
     print("=" * 60)
     print(f"Total Invocations:      {invocations:,} ({compacted_inv:,} compacted)")
     print(f"Original Tokens:        {orig_t:,}")
     print(f"Compacted Tokens:       {comp_t:,}")
-    print(f"Tokens Saved:           {saved_t:,} ({savings_pct}% token reduction)")
-    print(f"Bytes Saved:            {saved_b:,} bytes ({byte_savings_pct}% byte reduction)")
+    print(f"Tokens Saved:           {saved_t:,} ({savings_pct}% reduction)")
+    print(f"Bytes Saved:            {saved_b:,} bytes ({byte_savings_pct}% reduction)")
     print(f"Est. Financial Savings: ${usd_saved:,.4f} USD (@ $3.00/1M tokens)")
     print("=" * 60)
 
-    # Per Harness / Agent Breakdown
     by_harness = stats.get("by_harness", {})
     if by_harness:
-        print("\n🤖 Breakdown by Agent / Harness:")
+        print("\nBreakdown by Harness / Agent:")
         print(f"{'Harness/Agent':<20} {'Invocations':<14} {'Tokens Saved':<16} {'Savings %'}")
         print("-" * 60)
         for h_name, h_data in by_harness.items():
@@ -58,10 +63,9 @@ def print_gain_report(history: bool = False, reset: bool = False):
             h_pct = round((h_saved / h_orig * 100), 2) if h_orig > 0 else 0.0
             print(f"{h_name:<20} {h_data.get('invocations', 0):<14} {h_saved:<16,} {h_pct}%")
 
-    # Per Tool Breakdown
     by_tool = stats.get("by_tool", {})
     if by_tool:
-        print("\n🔧 Breakdown by Tool / MCP Server:")
+        print("\nBreakdown by Tool / MCP Server:")
         print(f"{'Tool Name':<20} {'Invocations':<14} {'Tokens Saved':<16} {'Savings %'}")
         print("-" * 60)
         for t_name, t_data in by_tool.items():
@@ -70,10 +74,9 @@ def print_gain_report(history: bool = False, reset: bool = False):
             t_pct = round((t_saved / t_orig * 100), 2) if t_orig > 0 else 0.0
             print(f"{t_name:<20} {t_data.get('invocations', 0):<14} {t_saved:<16,} {t_pct}%")
 
-    # History Log
     if history:
         hist = stats.get("history", [])
-        print("\n📜 Recent Invocation History (Last 20 Invocations):")
+        print("\nRecent Invocations:")
         print(f"{'Timestamp':<20} {'Harness':<14} {'Tool':<16} {'Strategy':<20} {'Saved'}")
         print("-" * 80)
         for entry in hist[:20]:
@@ -82,43 +85,49 @@ def print_gain_report(history: bool = False, reset: bool = False):
 def main():
     parser = argparse.ArgumentParser(
         prog="shrinkwrap",
-        description="ShrinkWrap: Drop-in 90%+ Token Compaction Proxy for MCP & AI Agent Tools"
+        description="ShrinkWrap: Token Compaction Proxy for MCP & Tool Invocations"
     )
     subparsers = parser.add_subparsers(dest="subcommand")
 
     # wrap-stdio
-    wrap_stdio_p = subparsers.add_parser("wrap-stdio", help="Run as stdio proxy wrapping target command")
-    wrap_stdio_p.add_argument("cmd_args", nargs=argparse.REMAINDER, help="Command to wrap")
+    wrap_stdio_p = subparsers.add_parser("wrap-stdio", help="Run stdio proxy wrapping target MCP server command")
+    wrap_stdio_p.add_argument("cmd_args", nargs=argparse.REMAINDER, help="Target command and arguments")
 
     # status
-    subparsers.add_parser("status", help="Show ShrinkWrap coverage status and active adapters")
+    subparsers.add_parser("status", help="Show ShrinkWrap installation status and active coverage gate")
 
     # gain / stats
-    gain_p = subparsers.add_parser("gain", help="Display token savings analytics and financial gains")
+    gain_p = subparsers.add_parser("gain", help="Display token savings metrics and financial analytics")
     gain_p.add_argument("--history", action="store_true", help="Show recent invocation event log")
+    gain_p.add_argument("--json", action="store_true", help="Output raw JSON data")
     gain_p.add_argument("--reset", action="store_true", help="Reset analytics storage database")
 
     stats_p = subparsers.add_parser("stats", help="Alias for shrinkwrap gain")
     stats_p.add_argument("--history", action="store_true", help="Show recent invocation event log")
+    stats_p.add_argument("--json", action="store_true", help="Output raw JSON data")
     stats_p.add_argument("--reset", action="store_true", help="Reset analytics storage database")
 
+    # fetch
+    fetch_p = subparsers.add_parser("fetch", help="Retrieve uncompacted payload from memory by reference handle")
+    fetch_p.add_argument("ref_handle", type=str, help="Reference handle (e.g. sw-ref:a1b2c3d4)")
+
     # benchmark
-    subparsers.add_parser("benchmark", help="Run token compaction benchmark suite")
+    subparsers.add_parser("benchmark", help="Execute benchmark test suite across sample payloads")
 
     # gap-report
     subparsers.add_parser("gap-report", help="Display host capability audit and extension proposal")
 
     # install / wrap
-    install_p = subparsers.add_parser("install", help="Auto-discover and wrap all active local MCP client configs")
+    install_p = subparsers.add_parser("install", help="Discover and wrap active local MCP client configurations")
     install_p.add_argument("--dry-run", action="store_true", help="Preview configuration changes without writing")
 
-    wrap_p = subparsers.add_parser("wrap", help="Wrap MCP servers in a specific config file")
-    wrap_p.add_argument("config_file", type=str, help="Path to config file")
+    wrap_p = subparsers.add_parser("wrap", help="Wrap MCP server commands in a specific config file")
+    wrap_p.add_argument("config_file", type=str, help="Path to configuration file")
     wrap_p.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
 
     # rollback
-    rollback_p = subparsers.add_parser("rollback", help="Restore config from backup")
-    rollback_p.add_argument("config_file", type=str, help="Path to config file")
+    rollback_p = subparsers.add_parser("rollback", help="Restore configuration file from backup")
+    rollback_p.add_argument("config_file", type=str, help="Path to configuration file")
 
     args = parser.parse_args()
 
@@ -133,25 +142,37 @@ def main():
         asyncio.run(proxy.run())
 
     elif args.subcommand == "status":
-        print(f"=== ShrinkWrap Status ===")
+        print(f"ShrinkWrap System Status")
+        print(f"========================")
         print(f"Version:           {__version__}")
         print(f"Coverage Status:   {__coverage_status__}")
         print(f"Universal Gate:    {__universal_status__}")
         print("Active Adapters:   shell, stdio_mcp_proxy, http_mcp_proxy")
 
     elif args.subcommand in ("gain", "stats"):
-        print_gain_report(history=args.history, reset=args.reset)
+        print_gain_report(history=args.history, reset=args.reset, output_json=args.json)
+
+    elif args.subcommand == "fetch":
+        data = global_buffer.fetch(args.ref_handle)
+        if data is None:
+            print(f"Error: Reference handle '{args.ref_handle}' not found or expired.", file=sys.stderr)
+            sys.exit(1)
+        if isinstance(data, (dict, list)):
+            print(json.dumps(data, indent=2))
+        else:
+            print(data)
 
     elif args.subcommand == "benchmark":
         res = run_benchmark_suite()
         s = res["summary"]
-        print("=== ShrinkWrap Benchmark Report ===")
+        print("ShrinkWrap Benchmark Report")
+        print("===========================")
         print(f"Total Test Cases:    {s['total_cases']}")
         print(f"Original Tokens:     {s['total_orig_tokens']:,}")
         print(f"Compacted Tokens:    {s['total_comp_tokens']:,}")
         print(f"Token Savings:       {s['overall_token_savings_pct']}%")
         print(f"Byte Savings:        {s['overall_byte_savings_pct']}%")
-        print(f"Total Execution:     {s['execution_time_ms']} ms\n")
+        print(f"Execution Time:      {s['execution_time_ms']} ms\n")
         print(f"{'Case Name':<25} {'Source':<14} {'Strategy':<20} {'Orig Tok':<10} {'Comp Tok':<10} {'Savings'}")
         print("-" * 90)
         for c in res["cases"]:
@@ -164,7 +185,7 @@ def main():
         cm = ConfigManager()
         configs = cm.discover_configs()
         if not configs:
-            print("No supported MCP client config files found automatically.")
+            print("No supported MCP client configuration files detected.")
             sys.exit(0)
         for c in configs:
             ok, msg = cm.wrap_config(c, dry_run=args.dry_run)

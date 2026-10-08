@@ -1,37 +1,67 @@
 """
 Volatile, TTL-backed Retrieval Buffer for ShrinkWrap.
-Preserves raw payload data in volatile memory so model can request exact data slices via reference handles.
+Caches full tool response payloads in ~/.shrinkwrap/buffer/ so models or operators
+can retrieve exact data slices via reference handles across process boundaries.
 """
 
-import hashlib
+import json
 import time
-from typing import Dict, Any, Optional
+import hashlib
+from pathlib import Path
+from typing import Any, Optional
+
+BUFFER_DIR = Path.home() / ".shrinkwrap" / "buffer"
+DEFAULT_TTL_SECONDS = 3600
 
 class RetrievalBuffer:
-    def __init__(self, ttl_seconds: int = 3600):
+    def __init__(self, buffer_dir: Path = BUFFER_DIR, ttl_seconds: int = DEFAULT_TTL_SECONDS):
+        self.buffer_dir = buffer_dir
         self.ttl_seconds = ttl_seconds
-        self._store: Dict[str, Dict[str, Any]] = {}
+        self.buffer_dir.mkdir(parents=True, exist_ok=True)
 
     def store(self, raw_data: Any) -> str:
-        serialized = str(raw_data)
+        serialized = json.dumps(raw_data) if isinstance(raw_data, (dict, list)) else str(raw_data)
         h = hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:12]
         ref_handle = f"sw-ref:{h}"
-        self._store[ref_handle] = {
-            "data": raw_data,
-            "timestamp": time.time()
+        
+        file_path = self.buffer_dir / f"{h}.json"
+        meta = {
+            "ref_handle": ref_handle,
+            "timestamp": time.time(),
+            "data": raw_data
         }
-        self._cleanup()
+        
+        tmp_path = file_path.with_suffix(".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2)
+        tmp_path.replace(file_path)
+        
+        self.cleanup()
         return ref_handle
 
     def fetch(self, ref_handle: str) -> Optional[Any]:
-        self._cleanup()
-        item = self._store.get(ref_handle)
-        return item["data"] if item else None
+        self.cleanup()
+        h = ref_handle.replace("sw-ref:", "")
+        file_path = self.buffer_dir / f"{h}.json"
+        if not file_path.exists():
+            return None
+        
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            return meta.get("data")
+        except Exception:
+            return None
 
-    def _cleanup(self):
+    def cleanup(self):
         now = time.time()
-        expired = [k for k, v in self._store.items() if now - v["timestamp"] > self.ttl_seconds]
-        for k in expired:
-            del self._store[k]
+        for p in self.buffer_dir.glob("*.json"):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                if now - meta.get("timestamp", 0) > self.ttl_seconds:
+                    p.unlink(missing_ok=True)
+            except Exception:
+                p.unlink(missing_ok=True)
 
 global_buffer = RetrievalBuffer()
