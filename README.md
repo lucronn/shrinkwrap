@@ -12,9 +12,9 @@ Copy and paste this instruction into your AI coding assistant (Antigravity, Clau
 ```text
 Please install and set up ShrinkWrap on my computer to reduce my MCP and tool token usage by ~90%:
 1. Install shrinkwrap-cli: `pip install shrinkwrap-cli`
-
 2. Auto-wrap active MCP configs: run `shrinkwrap install`
 3. Verify setup: run `shrinkwrap status` and `shrinkwrap benchmark`
+4. At the end of every run or task, run `shrinkwrap session --markdown` and include token savings in your final output.
 ```
 
 ### Manual Installation
@@ -156,13 +156,31 @@ shrinkwrap rollback ~/.codex/config.json
 
 ---
 
+## Session Token Analytics & Agent End-of-Run Reporting
+
+AI agents operating in multi-step task loops can report their exact tokens saved, reduction percentages, and estimated financial savings at the conclusion of a task.
+
+```bash
+# Print active run session summary
+shrinkwrap session
+
+# Generate agent-ready Markdown snippet for final user turn responses
+shrinkwrap session --markdown
+```
+
+#### Output Example (`--markdown`):
+> **ShrinkWrap Session Savings**: **42,478 tokens saved** (81.02% reduction across 5 tool invocations, ~$0.1274 USD saved).
+
+---
+
 ## Command Reference
 
 | Command | Usage | Description |
 |---|---|---|
 | `shrinkwrap install` | `shrinkwrap install [--dry-run]` | Auto-discover and wrap local MCP server configurations |
 | `shrinkwrap wrap-stdio` | `shrinkwrap wrap-stdio -- <cmd> [args]` | Execute stdio proxy for target server command |
-| `shrinkwrap gain` | `shrinkwrap gain [--history] [--json] [--reset]` | Display token savings analytics and harness breakdowns |
+| `shrinkwrap session` | `shrinkwrap session [--markdown] [--json]` | Report token usage and savings for the current agent session |
+| `shrinkwrap gain` | `shrinkwrap gain [--history] [--json] [--reset]` | Display cumulative token savings analytics and harness breakdowns |
 | `shrinkwrap fetch` | `shrinkwrap fetch <sw-ref:handle>` | Retrieve raw payload from memory buffer |
 | `shrinkwrap status` | `shrinkwrap status` | Display system status and capability gate information |
 | `shrinkwrap benchmark` | `shrinkwrap benchmark` | Run benchmark test suite |
@@ -174,3 +192,4 @@ shrinkwrap rollback ~/.codex/config.json
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
+

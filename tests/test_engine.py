@@ -29,3 +29,30 @@ def test_retrieval_buffer():
     assert ref.startswith("sw-ref:")
     fetched = global_buffer.fetch(ref)
     assert fetched == data
+
+def test_session_tracker(tmp_path):
+    from shrinkwrap.engine.tracker import TokenTracker
+    stats_file = tmp_path / "stats.json"
+    tracker = TokenTracker(stats_path=stats_file)
+    
+    tracker.record_event(
+        orig_tokens=1000,
+        comp_tokens=100,
+        orig_bytes=5000,
+        comp_bytes=500,
+        source_class="mcp",
+        tool_name="test_tool",
+        strategy="structured_summary",
+        harness="test_agent",
+        session_id="test_session_123"
+    )
+    
+    sess = tracker.get_session_stats(session_id="test_session_123")
+    assert sess["session_id"] == "test_session_123"
+    assert sess["invocations"] == 1
+    assert sess["orig_tokens"] == 1000
+    assert sess["comp_tokens"] == 100
+    assert sess["tokens_saved"] == 900
+    assert sess["savings_pct"] == 90.0
+    assert sess["est_usd_saved"] > 0
+

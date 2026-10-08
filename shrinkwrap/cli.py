@@ -82,6 +82,30 @@ def print_gain_report(history: bool = False, reset: bool = False, output_json: b
         for entry in hist[:20]:
             print(f"{entry.get('timestamp', ''):<20} {entry.get('harness', ''):<14} {entry.get('tool', ''):<16} {entry.get('strategy', ''):<20} {entry.get('tokens_saved', 0):,} ({entry.get('savings_pct', 0.0)}%)")
 
+def print_session_report(session_id: str = None, markdown: bool = False, output_json: bool = False):
+    sess = global_tracker.get_session_stats(session_id=session_id)
+    if output_json:
+        print(json.dumps(sess, indent=2))
+        return
+
+    invocations = sess.get("invocations", 0)
+    saved = sess.get("tokens_saved", 0)
+    pct = sess.get("savings_pct", 0.0)
+    usd = sess.get("est_usd_saved", 0.0)
+    sid = sess.get("session_id", "active")
+
+    if markdown:
+        print(f"> **ShrinkWrap Session Savings**: **{saved:,} tokens saved** ({pct}% reduction across {invocations} tool invocations, ~${usd:.4f} USD saved).")
+    else:
+        print("ShrinkWrap Session Token Summary")
+        print("================================")
+        print(f"Session ID:         {sid}")
+        print(f"Tool Invocations:   {invocations}")
+        print(f"Original Tokens:    {sess.get('orig_tokens', 0):,}")
+        print(f"Compacted Tokens:   {sess.get('comp_tokens', 0):,}")
+        print(f"Tokens Saved:       {saved:,} ({pct}% reduction)")
+        print(f"Est. USD Saved:     ${usd:.4f} USD")
+
 def main():
     parser = argparse.ArgumentParser(
         prog="shrinkwrap",
@@ -106,6 +130,13 @@ def main():
     stats_p.add_argument("--history", action="store_true", help="Show recent invocation event log")
     stats_p.add_argument("--json", action="store_true", help="Output raw JSON data")
     stats_p.add_argument("--reset", action="store_true", help="Reset analytics storage database")
+
+    # session
+    session_p = subparsers.add_parser("session", help="Display token summary for active agent run/session")
+    session_p.add_argument("--markdown", action="store_true", help="Output clean Markdown snippet for agent turn report")
+    session_p.add_argument("--json", action="store_true", help="Output raw JSON data")
+    session_p.add_argument("--session-id", type=str, help="Target session ID")
+
 
     # fetch
     fetch_p = subparsers.add_parser("fetch", help="Retrieve uncompacted payload from memory by reference handle")
@@ -152,7 +183,11 @@ def main():
     elif args.subcommand in ("gain", "stats"):
         print_gain_report(history=args.history, reset=args.reset, output_json=args.json)
 
+    elif args.subcommand == "session":
+        print_session_report(session_id=args.session_id, markdown=args.markdown, output_json=args.json)
+
     elif args.subcommand == "fetch":
+
         data = global_buffer.fetch(args.ref_handle)
         if data is None:
             print(f"Error: Reference handle '{args.ref_handle}' not found or expired.", file=sys.stderr)

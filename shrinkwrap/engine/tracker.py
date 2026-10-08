@@ -1,7 +1,6 @@
 """
-Persistent Token Analytics Tracker for ShrinkWrap.
-Records tokens processed, tokens saved, byte reductions, and detailed breakdowns per harness/agent, tool, and source class.
-Stores statistics persistently in ~/.shrinkwrap/stats.json.
+Persistent Token Analytics & Session Tracker for ShrinkWrap.
+Records tokens processed, tokens saved, byte reductions, and detailed breakdowns per harness, tool, and session ID.
 """
 
 import os
@@ -13,14 +12,11 @@ from typing import Dict, Any, List, Optional
 STATS_DIR = Path.home() / ".shrinkwrap"
 STATS_FILE = STATS_DIR / "stats.json"
 
-# Est cost per 1M input tokens (approx average across Claude 3.5 / GPT-4o)
 EST_USD_PER_1M_TOKENS = 3.00
 
 def detect_harness() -> str:
-    """Detects active agent/harness environment from environment variables and process context."""
     if os.getenv("SHRINKWRAP_HARNESS"):
         return os.getenv("SHRINKWRAP_HARNESS")
-    
     env_str = str(os.environ).lower()
     if "codex" in env_str:
         return "codex"
@@ -31,6 +27,10 @@ def detect_harness() -> str:
     elif "antigravity" in env_str or "gemini" in env_str:
         return "antigravity"
     return "generic-client"
+
+def detect_session_id() -> str:
+    """Returns explicit SHRINKWRAP_SESSION_ID if set, else falls back to process parent / default session."""
+    return os.getenv("SHRINKWRAP_SESSION_ID") or f"session_{time.strftime('%Y%m%d')}"
 
 class TokenTracker:
     def __init__(self, stats_path: Path = STATS_FILE):
@@ -55,7 +55,7 @@ class TokenTracker:
                 },
                 "by_harness": {},
                 "by_tool": {},
-                "by_source_class": {},
+                "by_session": {},
                 "history": []
             }
             self._save(initial_data)
@@ -84,9 +84,11 @@ class TokenTracker:
         source_class: str = "stdio_mcp",
         tool_name: str = "generic_tool",
         strategy: str = "pass_through",
-        harness: Optional[str] = None
+        harness: Optional[str] = None,
+        session_id: Optional[str] = None
     ):
         harness = harness or detect_harness()
+        session_id = session_id or detect_session_id()
         tokens_saved = max(0, orig_tokens - comp_tokens)
         bytes_saved = max(0, orig_bytes - comp_bytes)
         was_compacted = comp_tokens < orig_tokens
@@ -118,17 +120,19 @@ class TokenTracker:
         bt["comp_tokens"] += comp_tokens
         bt["tokens_saved"] += tokens_saved
 
-        # Update by_source_class
-        bsc = data["by_source_class"].setdefault(source_class, {"invocations": 0, "orig_tokens": 0, "comp_tokens": 0, "tokens_saved": 0})
-        bsc["invocations"] += 1
-        bsc["orig_tokens"] += orig_tokens
-        bsc["comp_tokens"] += comp_tokens
-        bsc["tokens_saved"] += tokens_saved
+        # Update by_session
+        by_sess = data.setdefault("by_session", {})
+        bs = by_sess.setdefault(session_id, {"invocations": 0, "orig_tokens": 0, "comp_tokens": 0, "tokens_saved": 0})
+        bs["invocations"] += 1
+        bs["orig_tokens"] += orig_tokens
+        bs["comp_tokens"] += comp_tokens
+        bs["tokens_saved"] += tokens_saved
 
         # Record event in history (keep last 100 entries)
         history_entry = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "harness": harness,
+            "session_id": session_id,
             "tool": tool_name,
             "source_class": source_class,
             "strategy": strategy,
@@ -145,6 +149,34 @@ class TokenTracker:
     def get_stats(self) -> Dict[str, Any]:
         return self._load()
 
+    def get_session_stats(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+        session_id = session_id or detect_session_id()
+        data = self._load()
+        sess_data = data.get("by_session", {}).get(session_id)
+        if not sess_data:
+            return {
+                "session_id": session_id,
+                "invocations": 0,
+                "orig_tokens": 0,
+                "comp_tokens": 0,
+                "tokens_saved": 0,
+                "savings_pct": 0.0,
+                "est_usd_saved": 0.0
+            }
+        orig = sess_data.get("orig_tokens", 0)
+        saved = sess_data.get("tokens_saved", 0)
+        comp = sess_data.get("comp_tokens", 0)
+        pct = round((saved / orig * 100), 2) if orig > 0 else 0.0
+        usd = round((saved / 1_000_000.0) * EST_USD_PER_1M_TOKENS, 4)
+        return {
+            "session_id": session_id,
+            "invocations": sess_data.get("invocations", 0),
+            "orig_tokens": orig,
+            "comp_tokens": comp,
+            "tokens_saved": saved,
+            "savings_pct": pct,
+            "est_usd_saved": usd
+        }
 
     def reset(self):
         if self.stats_path.exists():

@@ -10,4 +10,5 @@ Please install and set up ShrinkWrap on my computer to reduce my MCP and tool to
 
 2. Run `shrinkwrap install` to auto-discover and wrap all active local MCP client configurations (~/.codex/config.json, Claude Desktop, Cursor).
 3. Run `shrinkwrap status` and `shrinkwrap benchmark` to verify the installation and show active token savings.
+4. At the end of every run or task, run `shrinkwrap session --markdown` and include the token savings summary in your final response.
 ```
