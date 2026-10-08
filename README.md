@@ -25,7 +25,8 @@ shrinkwrap install
 
 ### Terminal Side-by-Side Visual Comparison
 
-![ShrinkWrap Terminal Side-by-Side Comparison](assets/terminal_comparison.jpg)
+![ShrinkWrap Terminal Execution Demo](assets/terminal_demo.gif)
+
 
 ### Benchmark Summary & Token Savings
 
