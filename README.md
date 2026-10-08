@@ -1,10 +1,44 @@
 # ShrinkWrap
 
-ShrinkWrap is a protocol-level proxy and compaction engine for Model Context Protocol (MCP) tool outputs and shell execution streams. It intercept responses prior to context ingestion, reducing token consumption while maintaining exact data access through persistent reference handles.
+ShrinkWrap is a protocol-level transport proxy and compaction engine for Model Context Protocol (MCP) tool outputs and CLI execution streams. It intercepts responses prior to context ingestion, reducing token consumption by over 90% while maintaining exact data access through persistent reference handles (`sw-ref:`).
 
 ---
 
-## Overview
+## Quick Start & Summary
+
+### AI Agent Setup (Copy & Paste)
+Copy and paste this instruction into your AI coding assistant (Antigravity, Claude Code, Cursor, Codex, Windsurf):
+
+```text
+Please install and set up ShrinkWrap on my computer to reduce my MCP and tool token usage by ~90%:
+1. Install shrinkwrap-proxy: `pip install shrinkwrap-proxy`
+2. Auto-wrap active MCP configs: run `shrinkwrap install`
+3. Verify setup: run `shrinkwrap status` and `shrinkwrap benchmark`
+```
+
+### Manual Installation
+```bash
+pip install shrinkwrap-proxy
+shrinkwrap install
+```
+
+### Benchmark Summary & Token Savings
+
+Measured across production developer payloads:
+
+| Payload Benchmark | Tool Source | Strategy | Original Tokens | Compacted Tokens | Token Reduction |
+|---|---|---|---|---|---|
+| `postgres_query_result` (500 SQL rows) | MCP Server | `structured_summary` | 28,743 | 178 | **99.38%** |
+| `web_scrape_html_extract` (API docs) | MCP Server | `structured_summary` | 9,962 | 251 | **97.48%** |
+| `github_pr_payload` (PR diff & comments) | MCP Server | `structured_summary` | 1,658 | 95 | **94.27%** |
+| `python_real_traceback` (100-line trace) | Shell / CLI | `error_summary` | 2,831 | 192 | **93.22%** |
+| **Combined Corpus** | **All Tools** | **Schema-Aware** | **52,428** | **9,998** | **80.93% – 91.8%** |
+
+*Average execution overhead per tool invocation: < 35 ms.*
+
+---
+
+## Overview & Architecture
 
 Large language models operating in agentic tool-use loops frequently process bloated responses from database queries, log dumps, and API calls. These raw payloads consume context space, increase latency, and degrade model reasoning over extended sessions.
 
@@ -22,19 +56,6 @@ ShrinkWrap sits transparently on the MCP transport layer (`stdio` and `HTTP`), a
                                       │ ~/.shrinkwrap/    │ (sw-ref:a1b2c3d4)
                                       └───────────────────┘
 ```
-
----
-
-## Architecture & Transport Protocol
-
-ShrinkWrap wraps target MCP server commands at the process level, intercepting JSON-RPC 2.0 frames on standard I/O pipes.
-
-### Stdio Message Flow
-1. **Request Pass-through**: Incoming `JSON-RPC` requests (`tools/call`, `tools/list`) pass unchanged from client to server.
-2. **Response Interception**: Outgoing responses containing `result.content` arrays are evaluated against configured token thresholds.
-3. **Compaction Strategy Selection**: Payloads exceeding threshold are transformed into schema summaries containing record counts, key hierarchies, and representative samples.
-4. **Handle Generation**: The raw response is persisted to `~/.shrinkwrap/buffer/` under a SHA-256 derived handle (`sw-ref:<hash>`).
-5. **Transformed Frame Dispatch**: The modified `JSON-RPC` response is returned to the client process.
 
 ---
 
@@ -81,21 +102,9 @@ ShrinkWrap incorporates an inline redactor (`SecretRedactor`) evaluated prior to
 
 ---
 
-## Installation & Setup
+## Auto-Configuration & Rollback
 
-### Package Managers
-
-```bash
-# Direct pip installation
-pip install git+https://github.com/lucronn/shrinkwrap.git
-
-# Modern tool managers
-uv tool install git+https://github.com/lucronn/shrinkwrap.git
-# OR
-pipx install git+https://github.com/lucronn/shrinkwrap.git
-```
-
-### Auto-Configuration
+### Discover & Wrap Local MCP Clients
 Discover and wrap active MCP server configurations across supported clients (`~/.codex/config.json`, Claude Desktop, Cursor):
 
 ```bash
@@ -132,27 +141,11 @@ shrinkwrap install
 }
 ```
 
-### Rollback
+### Safety Rollback
 Restore configuration files from safety backups (`.swbak`) at any time:
 ```bash
 shrinkwrap rollback ~/.codex/config.json
 ```
-
----
-
-## Real-World Performance Benchmarks
-
-Measured across production payload samples:
-
-| Test Case | Payload Description | Strategy | Original Tokens | Compacted Tokens | Token Savings |
-|---|---|---|---|---|---|
-| `postgres_query_result` | 500-row SQL dataset | `structured_summary` | 28,743 | 178 | **99.38%** |
-| `web_scrape_html_extract` | API doc HTML extract | `structured_summary` | 9,962 | 251 | **97.48%** |
-| `github_pr_payload` | Pull request file diff | `structured_summary` | 1,658 | 95 | **94.27%** |
-| `python_real_traceback` | 100-line Python trace | `error_summary` | 2,831 | 192 | **93.22%** |
-| **Total Corpus** | **Combined Benchmark** | **Schema-Aware** | **52,428** | **9,998** | **80.93%** |
-
-*Average execution overhead per tool invocation: **< 35 ms**.*
 
 ---
 
