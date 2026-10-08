@@ -7,9 +7,12 @@ import os
 import json
 import shutil
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 
 KNOWN_CONFIG_PATHS = [
+    Path.home() / ".gemini" / "config" / "mcp_config.json",
+    Path.home() / ".gemini" / "mcp_config.json",
+    Path.home() / ".antigravity" / "mcp_config.json",
     Path.home() / ".codex" / "config.json",
     Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
     Path.home() / ".cursor" / "mcp.json",
@@ -41,9 +44,9 @@ class ConfigManager:
         modified = False
         for server_name, server_cfg in mcp_servers.items():
             command = server_cfg.get("command")
+            if not command or command == "shrinkwrap":
+                continue  # Skip remote/URL servers or already wrapped servers
             args = server_cfg.get("args", [])
-            if command == "shrinkwrap":
-                continue  # Already wrapped
 
             # Wrap command: shrinkwrap wrap-stdio -- command args...
             new_command = "shrinkwrap"
