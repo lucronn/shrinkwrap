@@ -23,7 +23,12 @@ pip install shrinkwrap-cli
 shrinkwrap install
 ```
 
+### Terminal Side-by-Side Visual Comparison
+
+![ShrinkWrap Terminal Side-by-Side Comparison](assets/terminal_comparison.jpg)
+
 ### Benchmark Summary & Token Savings
+
 
 Measured across production developer payloads:
 
