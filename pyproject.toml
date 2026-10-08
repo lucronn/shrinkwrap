@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "shrinkwrap"
-version = "0.1.1"
+name = "shrinkwrap-cli"
+version = "0.1.2"
 description = "Drop-in 90%+ Token Compaction Proxy for MCP & AI Agent Tools"
 readme = "README.md"
 authors = [{ name = "ShrinkWrap Maintainers" }]

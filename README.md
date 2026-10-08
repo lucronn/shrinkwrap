@@ -11,7 +11,7 @@ Copy and paste this instruction into your AI coding assistant (Antigravity, Clau
 
 ```text
 Please install and set up ShrinkWrap on my computer to reduce my MCP and tool token usage by ~90%:
-1. Install shrinkwrap: `pip install shrinkwrap`
+1. Install shrinkwrap-cli: `pip install shrinkwrap-cli`
 
 2. Auto-wrap active MCP configs: run `shrinkwrap install`
 3. Verify setup: run `shrinkwrap status` and `shrinkwrap benchmark`
@@ -19,8 +19,7 @@ Please install and set up ShrinkWrap on my computer to reduce my MCP and tool to
 
 ### Manual Installation
 ```bash
-pip install shrinkwrap
-
+pip install shrinkwrap-cli
 shrinkwrap install
 ```
 
