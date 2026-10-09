@@ -186,7 +186,7 @@ def render_frame(frame_idx):
                     ("Original Tokens:    28,743", TEXT_DIM, False),
                     ("Compacted Tokens:   178", TEXT_DIM, False),
                     ("Tokens Saved:       28,565 (99.38% reduction)", TEXT_SUCCESS, True),
-                    ("Est. USD Saved:     $0.0857 USD", TEXT_SUCCESS, False),
+                    ("Est. Cost Saved:    $1.42 USD (reasoning / multi-turn)", TEXT_SUCCESS, False),
                 ]
                 for r_text, r_col, r_bold in report_lines:
                     ry += 18
