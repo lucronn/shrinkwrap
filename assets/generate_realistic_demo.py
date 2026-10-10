@@ -125,7 +125,7 @@ def render_frame(frame_idx):
             ly += 24
             l_draw.text((lx, ly), "[context-monitor] +28,743 tokens ingested to context", fill=TEXT_ERR, font=font_mono_bold)
             ly += 18
-            l_draw.text((lx, ly), "[codex-error] 5-hr quota exhausted (100% -> 0% in 5m)", fill=TEXT_ERR, font=font_mono_bold)
+            l_draw.text((lx, ly), "[codex-error] 5-hr quota exhausted: 512,000 tok in 4m 12s", fill=TEXT_ERR, font=font_mono_bold)
             ly += 24
             l_draw.text((lx, ly), "dull@phobosair", fill=TEXT_PROMPT, font=font_mono_bold)
             l_draw.text((lx + 115, ly), "shrinkwrap %", fill=TEXT_PATH, font=font_mono_bold)
@@ -186,7 +186,8 @@ def render_frame(frame_idx):
                     ("Original Tokens:    28,743", TEXT_DIM, False),
                     ("Compacted Tokens:   178", TEXT_DIM, False),
                     ("Tokens Saved:       28,565 (99.38% reduction)", TEXT_SUCCESS, True),
-                    ("Est. Cost Saved:    $1.42 USD (reasoning / multi-turn)", TEXT_SUCCESS, False),
+                    ("Turn Cost Saved:    $0.71 USD (@ $25/1M Luna 6)", TEXT_SUCCESS, False),
+                    ("5-Hr Quota Shield:  512,000 tok saved (~$12.80 USD)", TEXT_SUCCESS, True),
                 ]
                 for r_text, r_col, r_bold in report_lines:
                     ry += 18
