@@ -123,9 +123,9 @@ def render_frame(frame_idx):
         
         if frame_idx >= 40:
             ly += 24
-            l_draw.text((lx, ly), "[context-monitor] +28,743 tokens ingested to context", fill=TEXT_ERR, font=font_mono_bold)
+            l_draw.text((lx, ly), "[context-monitor] +28,743 tokens (compounding / turn)", fill=TEXT_ERR, font=font_mono_bold)
             ly += 18
-            l_draw.text((lx, ly), "[codex-error] 5-hr quota exhausted: 512,000 tok in 4m 12s", fill=TEXT_ERR, font=font_mono_bold)
+            l_draw.text((lx, ly), "[codex-error] 5-hr quota hit: 4.8M tokens in 4m 12s", fill=TEXT_ERR, font=font_mono_bold)
             ly += 24
             l_draw.text((lx, ly), "dull@phobosair", fill=TEXT_PROMPT, font=font_mono_bold)
             l_draw.text((lx + 115, ly), "shrinkwrap %", fill=TEXT_PATH, font=font_mono_bold)
@@ -182,12 +182,12 @@ def render_frame(frame_idx):
                 report_lines = [
                     ("ShrinkWrap Session Token Summary", TEXT_WHITE, True),
                     ("================================", TEXT_DIM, False),
-                    ("Tool Invocations:   1", TEXT_WHITE, False),
+                    ("Tool Invocations:   1 (Postgres 500 rows)", TEXT_WHITE, False),
                     ("Original Tokens:    28,743", TEXT_DIM, False),
                     ("Compacted Tokens:   178", TEXT_DIM, False),
                     ("Tokens Saved:       28,565 (99.38% reduction)", TEXT_SUCCESS, True),
-                    ("Turn Cost Saved:    $0.71 USD (@ $25/1M Luna 6)", TEXT_SUCCESS, False),
-                    ("5-Hr Quota Shield:  512,000 tok saved (~$12.80 USD)", TEXT_SUCCESS, True),
+                    ("Turn Compounding:   428,475 tok ($6.42 USD / 15 turns)", TEXT_SUCCESS, False),
+                    ("5-Hr Quota Shield:  4,800,000 tok saved (~$72.00 USD)", TEXT_SUCCESS, True),
                 ]
                 for r_text, r_col, r_bold in report_lines:
                     ry += 18
