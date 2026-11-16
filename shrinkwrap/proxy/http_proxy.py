@@ -1,10 +1,8 @@
-"""
-HTTP MCP Proxy module for ShrinkWrap.
-Intercepts HTTP / SSE transport JSON-RPC 2.0 payloads.
-"""
+"""HTTP MCP response transformer for embedding in a separate transport."""
 
 from typing import Dict, Any
 from shrinkwrap.engine.compactor import CompactionEngine
+from shrinkwrap.proxy.transform import transform_tool_result
 
 class HttpMCPProxy:
     def __init__(self, compactor: CompactionEngine = None):
@@ -12,10 +10,5 @@ class HttpMCPProxy:
 
     def transform_response(self, response_body: Dict[str, Any]) -> Dict[str, Any]:
         if "result" in response_body and isinstance(response_body["result"], dict):
-            res = response_body["result"]
-            if "content" in res and isinstance(res["content"], list):
-                for item in res["content"]:
-                    if item.get("type") == "text" and "text" in item:
-                        compacted, strat, o_t, c_t = self.compactor.compact(item["text"], source_type="mcp_http")
-                        item["text"] = json.dumps(compacted) if isinstance(compacted, (dict, list)) else str(compacted)
+            transform_tool_result(response_body["result"], self.compactor, "mcp_http")
         return response_body

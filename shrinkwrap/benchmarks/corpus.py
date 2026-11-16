@@ -1,6 +1,7 @@
 """
-Real-World Benchmark Corpus for ShrinkWrap.
-Contains authentic production-like payloads: GitHub API responses, Postgres query results, Slack thread histories, Web Scrapes, and Python stack traces.
+Synthetic benchmark corpus for ShrinkWrap.
+Contains representative API, SQL, chat, HTML, and traceback payloads plus
+pathological long fields that previously expanded during compaction.
 """
 
 def generate_benchmark_cases():
@@ -96,5 +97,15 @@ def generate_benchmark_cases():
                 f'  File "/usr/local/lib/python3.11/site-packages/engine/service_{i}.py", line {i*14+3}, in execute_pipeline\n    result = self._dispatch_handler(step_id={i}, context=ctx)'
                 for i in range(100)
             ) + "\nDatabaseConnectionError: Failed to establish TLS handshake with db-cluster.internal:5432 (Connection timed out after 30000ms)"
+        },
+        {
+            "name": "single_line_output",
+            "source": "shell",
+            "input": "x" * 50000
+        },
+        {
+            "name": "large_first_field",
+            "source": "mcp",
+            "input": {"body": "x" * 50000, "id": 42}
         }
     ]

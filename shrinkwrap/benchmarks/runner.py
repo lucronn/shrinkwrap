@@ -5,12 +5,14 @@ Calculates token and byte reduction metrics across test cases.
 
 import time
 import json
-from typing import Dict, Any, List
+import tempfile
+from pathlib import Path
+from typing import Dict, Any
 from shrinkwrap.engine.compactor import CompactionEngine
+from shrinkwrap.engine.retrieval_buffer import RetrievalBuffer
 from shrinkwrap.benchmarks.corpus import generate_benchmark_cases
 
 def run_benchmark_suite() -> Dict[str, Any]:
-    compactor = CompactionEngine(token_threshold=100)
     cases = generate_benchmark_cases()
     results = []
     
@@ -19,32 +21,34 @@ def run_benchmark_suite() -> Dict[str, Any]:
     total_orig_bytes = 0
     total_comp_bytes = 0
     
-    t0 = time.perf_counter()
-    for c in cases:
-        inp = c["input"]
-        raw_str = json.dumps(inp) if isinstance(inp, (dict, list)) else str(inp)
-        orig_bytes = len(raw_str.encode("utf-8"))
-        
-        compacted, strat, orig_tok, comp_tok = compactor.compact(inp, source_type=c["source"])
-        comp_str = json.dumps(compacted) if isinstance(compacted, (dict, list)) else str(compacted)
-        comp_bytes = len(comp_str.encode("utf-8"))
-        
-        total_orig_tokens += orig_tok
-        total_comp_tokens += comp_tok
-        total_orig_bytes += orig_bytes
-        total_comp_bytes += comp_bytes
-        
-        savings_pct = ((orig_tok - comp_tok) / orig_tok * 100) if orig_tok > 0 else 0.0
-        results.append({
-            "name": c["name"],
-            "source": c["source"],
-            "strategy": strat,
-            "orig_tokens": orig_tok,
-            "comp_tokens": comp_tok,
-            "savings_pct": round(savings_pct, 2)
-        })
-    
-    t1 = time.perf_counter()
+    with tempfile.TemporaryDirectory(prefix="shrinkwrap-benchmark-") as buffer_dir:
+        compactor = CompactionEngine(token_threshold=100, record_stats=False,
+                                    buffer=RetrievalBuffer(Path(buffer_dir)))
+        t0 = time.perf_counter()
+        for c in cases:
+            inp = c["input"]
+            raw_str = json.dumps(inp, ensure_ascii=False, separators=(",", ":")) if isinstance(inp, (dict, list)) else str(inp)
+            orig_bytes = len(raw_str.encode("utf-8"))
+
+            compacted, strat, orig_tok, comp_tok = compactor.compact(inp, source_type=c["source"])
+            comp_str = json.dumps(compacted, ensure_ascii=False, separators=(",", ":")) if isinstance(compacted, (dict, list)) else str(compacted)
+            comp_bytes = len(comp_str.encode("utf-8"))
+
+            total_orig_tokens += orig_tok
+            total_comp_tokens += comp_tok
+            total_orig_bytes += orig_bytes
+            total_comp_bytes += comp_bytes
+
+            savings_pct = ((orig_tok - comp_tok) / orig_tok * 100) if orig_tok > 0 else 0.0
+            results.append({
+                "name": c["name"],
+                "source": c["source"],
+                "strategy": strat,
+                "orig_tokens": orig_tok,
+                "comp_tokens": comp_tok,
+                "savings_pct": round(savings_pct, 2)
+            })
+        t1 = time.perf_counter()
     total_time_ms = (t1 - t0) * 1000
     
     overall_tok_savings = ((total_orig_tokens - total_comp_tokens) / total_orig_tokens * 100) if total_orig_tokens > 0 else 0.0

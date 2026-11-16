@@ -1,18 +1,25 @@
 """
 Config Routing & Rollback Manager for ShrinkWrap.
-Discovers MCP client configurations (~/.codex/config.json, Claude Desktop, Cursor) and idempotently wraps MCP servers.
+Discovers supported Codex TOML and JSON MCP configurations and wraps local servers.
 """
 
-import os
 import json
+import os
 import shutil
+import stat
+import sys
+import tempfile
+from collections.abc import MutableMapping
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import List, Tuple
+
+import tomlkit
 
 KNOWN_CONFIG_PATHS = [
     Path.home() / ".gemini" / "config" / "mcp_config.json",
     Path.home() / ".gemini" / "mcp_config.json",
     Path.home() / ".antigravity" / "mcp_config.json",
+    Path.home() / ".codex" / "config.toml",
     Path.home() / ".codex" / "config.json",
     Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
     Path.home() / ".cursor" / "mcp.json",
@@ -31,26 +38,33 @@ class ConfigManager:
         if not config_path.exists():
             return False, f"Config file {config_path} does not exist."
 
+        is_toml = config_path.suffix == ".toml"
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            source = config_path.read_text(encoding="utf-8")
+            data = tomlkit.parse(source) if is_toml else json.loads(source)
         except Exception as e:
             return False, f"Failed to parse {config_path}: {e}"
 
-        mcp_servers = data.get("mcpServers") or data.get("mcp_servers")
-        if not mcp_servers or not isinstance(mcp_servers, dict):
-            return False, f"No mcpServers block found in {config_path}."
+        mcp_servers = data.get("mcp_servers") if is_toml else data.get("mcpServers") or data.get("mcp_servers")
+        if not isinstance(mcp_servers, MutableMapping) or not mcp_servers:
+            return False, f"No MCP server block found in {config_path}."
 
         modified = False
         for server_name, server_cfg in mcp_servers.items():
+            if not isinstance(server_cfg, MutableMapping):
+                continue
             command = server_cfg.get("command")
-            if not command or command == "shrinkwrap":
+            if not isinstance(command, str) or not command or command == "shrinkwrap":
                 continue  # Skip remote/URL servers or already wrapped servers
             args = server_cfg.get("args", [])
+            if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
+                return False, f"Invalid args for MCP server {server_name} in {config_path}."
+            if list(args[:4]) == ["-m", "shrinkwrap.cli", "wrap-stdio", "--"]:
+                continue
 
-            # Wrap command: shrinkwrap wrap-stdio -- command args...
-            new_command = "shrinkwrap"
-            new_args = ["wrap-stdio", "--", command] + args
+            # Use the current Python executable so GUI clients need no PATH setup.
+            new_command = sys.executable
+            new_args = ["-m", "shrinkwrap.cli", "wrap-stdio", "--", command] + list(args)
             server_cfg["command"] = new_command
             server_cfg["args"] = new_args
             modified = True
@@ -61,12 +75,19 @@ class ConfigManager:
         if dry_run:
             return True, f"Dry-run: Would wrap servers in {config_path}."
 
-        # Create safety backup
+        serialized = tomlkit.dumps(data) if is_toml else json.dumps(data, indent=2) + "\n"
+        # Keep a safety backup and replace the config atomically.
         backup_path = config_path.with_suffix(config_path.suffix + ".swbak")
         shutil.copy2(config_path, backup_path)
-
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        fd, tmp_name = tempfile.mkstemp(prefix=config_path.name + ".", suffix=".tmp", dir=config_path.parent)
+        try:
+            os.chmod(tmp_name, stat.S_IMODE(config_path.stat().st_mode))
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(serialized)
+            os.replace(tmp_name, config_path)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
 
         return True, f"Successfully wrapped MCP servers in {config_path}. Backup saved to {backup_path.name}."
 

@@ -8,13 +8,14 @@ import json
 import asyncio
 from typing import Dict, Any
 from shrinkwrap.engine.compactor import CompactionEngine
+from shrinkwrap.proxy.transform import transform_tool_result
 
 class StdioMCPProxy:
     def __init__(self, target_command: list[str], compactor: CompactionEngine = None):
         self.target_command = target_command
         self.compactor = compactor or CompactionEngine()
 
-    async def run(self):
+    async def run(self) -> int:
         proc = await asyncio.create_subprocess_exec(
             *self.target_command,
             stdin=asyncio.subprocess.PIPE,
@@ -27,12 +28,16 @@ class StdioMCPProxy:
             reader = asyncio.StreamReader()
             protocol = asyncio.StreamReaderProtocol(reader)
             await loop.connect_read_pipe(lambda: protocol, sys.stdin)
-            while True:
-                line = await reader.readline()
-                if not line:
-                    break
-                proc.stdin.write(line)
-                await proc.stdin.drain()
+            try:
+                while True:
+                    line = await reader.readline()
+                    if not line:
+                        break
+                    proc.stdin.write(line)
+                    await proc.stdin.drain()
+            finally:
+                if not proc.stdin.is_closing():
+                    proc.stdin.close()
 
         async def stdout_loop():
             while True:
@@ -41,31 +46,24 @@ class StdioMCPProxy:
                     break
                 try:
                     data = json.loads(line.decode("utf-8"))
-                    compacted = self.process_jsonrpc(data)
-                    out_line = (json.dumps(compacted) + "\n").encode("utf-8")
-                    sys.stdout.buffer.write(out_line)
-                    sys.stdout.buffer.flush()
-                except Exception:
+                except (UnicodeDecodeError, json.JSONDecodeError):
                     sys.stdout.buffer.write(line)
                     sys.stdout.buffer.flush()
+                    continue
+                compacted = self.process_jsonrpc(data)
+                out_line = (json.dumps(compacted, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+                sys.stdout.buffer.write(out_line)
+                sys.stdout.buffer.flush()
 
-        await asyncio.gather(stdin_loop(), stdout_loop())
+        input_task = asyncio.create_task(stdin_loop())
+        try:
+            await stdout_loop()
+        finally:
+            input_task.cancel()
+            await asyncio.gather(input_task, return_exceptions=True)
+        return await proc.wait()
 
     def process_jsonrpc(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        if "result" in data and isinstance(data["result"], dict) and "content" in data["result"]:
-            content = data["result"]["content"]
-            if isinstance(content, list):
-                new_content = []
-                for item in content:
-                    if item.get("type") == "text" and "text" in item:
-                        raw_text = item["text"]
-                        try:
-                            json_obj = json.loads(raw_text)
-                            compacted, strat, orig_t, comp_t = self.compactor.compact(json_obj, source_type="mcp")
-                            item["text"] = json.dumps(compacted)
-                        except Exception:
-                            compacted, strat, orig_t, comp_t = self.compactor.compact(raw_text, source_type="mcp")
-                            item["text"] = json.dumps(compacted) if isinstance(compacted, (dict, list)) else str(compacted)
-                    new_content.append(item)
-                data["result"]["content"] = new_content
+        if isinstance(data, dict) and isinstance(data.get("result"), dict):
+            transform_tool_result(data["result"], self.compactor, "mcp")
         return data

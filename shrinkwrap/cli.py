@@ -170,15 +170,15 @@ def main():
             print("Error: No target command specified for wrap-stdio.", file=sys.stderr)
             sys.exit(1)
         proxy = StdioMCPProxy(cmd_args)
-        asyncio.run(proxy.run())
+        sys.exit(asyncio.run(proxy.run()))
 
     elif args.subcommand == "status":
         print(f"ShrinkWrap System Status")
         print(f"========================")
         print(f"Version:           {__version__}")
         print(f"Coverage Status:   {__coverage_status__}")
-        print(f"Universal Gate:    {__universal_status__}")
-        print("Active Adapters:   shell, stdio_mcp_proxy, http_mcp_proxy")
+        print(f"Host Interception: {__universal_status__}")
+        print("Available:         stdio MCP proxy, HTTP response transformer, shell guidance")
 
     elif args.subcommand in ("gain", "stats"):
         print_gain_report(history=args.history, reset=args.reset, output_json=args.json)
@@ -222,19 +222,27 @@ def main():
         if not configs:
             print("No supported MCP client configuration files detected.")
             sys.exit(0)
+        failed = False
         for c in configs:
             ok, msg = cm.wrap_config(c, dry_run=args.dry_run)
             print(f"[{c.name}] {msg}")
+            failed |= not ok
+        if failed:
+            sys.exit(1)
 
     elif args.subcommand == "wrap":
         cm = ConfigManager()
         ok, msg = cm.wrap_config(Path(args.config_file), dry_run=args.dry_run)
         print(msg)
+        if not ok:
+            sys.exit(1)
 
     elif args.subcommand == "rollback":
         cm = ConfigManager()
         ok, msg = cm.rollback_config(Path(args.config_file))
         print(msg)
+        if not ok:
+            sys.exit(1)
 
     else:
         parser.print_help()
