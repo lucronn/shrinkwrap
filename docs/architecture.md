@@ -26,6 +26,8 @@ The engine converts input to text, redacts recognized secrets, estimates tokens,
 
 Token counts use a character and word heuristic. They are useful for a local decision and analytics, but they are not model tokenizer counts or billing data.
 
+Each proxy process records analytics in `stats.json`. Updates take a cross-process file lock and replace the JSON file atomically, so concurrent wrapped servers do not overwrite each other's counters. The recent-event history keeps at most 100 entries.
+
 ## Retrieval
 
 Both `shrinkwrap fetch` and the stdio `shrinkwrap_fetch` tool read the same buffer. A reference identifies the full redacted payload for one hour by default. An optional [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901) selects a nested value. `offset` and `limit` split its text representation into character chunks. For an object or array, concatenate chunks before parsing the JSON. The MCP tool defaults to 4,000 characters and allows at most 16,000 per call.
