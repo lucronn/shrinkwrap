@@ -80,6 +80,8 @@ shrinkwrap session --markdown
 
 ## Development
 
+See [Contributing](CONTRIBUTING.md) for tests and releases, the [architecture guide](docs/architecture.md) for message and buffer behavior, and the [changelog](CHANGELOG.md) for release notes.
+
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e . pytest
