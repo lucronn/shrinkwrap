@@ -10,8 +10,9 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any, Optional
+from shrinkwrap.state import state_dir
 
-BUFFER_DIR = Path.home() / ".shrinkwrap" / "buffer"
+BUFFER_DIR = state_dir() / "buffer"
 DEFAULT_TTL_SECONDS = 3600
 COMPRESSION_THRESHOLD_BYTES = 64 * 1024
 _HANDLE = re.compile(r"sw-ref:([0-9a-f]{12})\Z")

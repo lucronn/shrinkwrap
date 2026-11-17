@@ -48,7 +48,7 @@ The handle retrieves the **redacted** payload. `--pointer` selects a JSON value 
 
 The stdio proxy also advertises a `shrinkwrap_fetch` MCP tool when the wrapped server does not already use that name. An agent can call it with `ref_handle` and optional `pointer`, `offset`, and `limit` arguments. It returns up to 4,000 characters by default, with a 16,000-character maximum per call. Follow `next_offset` to read more. The HTTP transformer does not advertise this tool. The [MCP tools specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) defines the discovery and call messages used here.
 
-Files live in `~/.shrinkwrap/buffer/`. Large entries that compress well are stored as gzip JSON; existing plain JSON entries remain readable. Entries expire after one hour by default and are removed during periodic cleanup or when an expired handle is fetched. Set `SHRINKWRAP_TTL_SECONDS` to a positive number to change the TTL. Buffer directories and new files are owner-only.
+Files live in `~/.shrinkwrap/buffer/` by default. Set `SHRINKWRAP_STATE_DIR` before launching the proxy and CLI to put the buffer and analytics in another directory. Large entries that compress well are stored as gzip JSON; existing plain JSON entries remain readable. Entries expire after one hour by default and are removed during periodic cleanup or when an expired handle is fetched. Set `SHRINKWRAP_TTL_SECONDS` to a positive number to change the TTL. Buffer directories and new files are owner-only.
 
 Redaction handles common token formats, private key blocks, bearer values, and named credential fields. It is best effort. Check outputs before using ShrinkWrap with unusually sensitive data. ShrinkWrap itself sends no payloads or analytics to a remote service.
 

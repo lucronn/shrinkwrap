@@ -30,7 +30,7 @@ Token counts use a character and word heuristic. They are useful for a local dec
 
 Both `shrinkwrap fetch` and the stdio `shrinkwrap_fetch` tool read the same buffer. A reference identifies the full redacted payload for one hour by default. An optional [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901) selects a nested value. `offset` and `limit` split its text representation into character chunks. For an object or array, concatenate chunks before parsing the JSON. The MCP tool defaults to 4,000 characters and allows at most 16,000 per call.
 
-The buffer stores smaller entries as JSON. For entries of at least 64 KiB, it uses gzip JSON when that saves at least 10% of the bytes. Existing plain JSON entries remain readable. File modification times determine expiry; periodic cleanup removes old entries. The buffer directory and newly written files are owner-only.
+The buffer stores smaller entries as JSON. For entries of at least 64 KiB, it uses gzip JSON when that saves at least 10% of the bytes. Existing plain JSON entries remain readable. File modification times determine expiry; periodic cleanup removes old entries. The buffer directory and newly written files are owner-only. `SHRINKWRAP_STATE_DIR` can relocate both the buffer and analytics files when set before process startup.
 
 Handles are 12 hexadecimal characters from a SHA-256 digest. They identify cached content; they are not authentication tokens. Redaction is best effort, so use care with unusually sensitive payloads.
 

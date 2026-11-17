@@ -8,8 +8,9 @@ import json
 import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from shrinkwrap.state import state_dir
 
-STATS_DIR = Path.home() / ".shrinkwrap"
+STATS_DIR = state_dir()
 STATS_FILE = STATS_DIR / "stats.json"
 
 EST_USD_PER_1M_TOKENS = 3.00

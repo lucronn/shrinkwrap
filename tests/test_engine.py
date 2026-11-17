@@ -2,7 +2,7 @@ import pytest
 from shrinkwrap.engine.compactor import CompactionEngine
 from shrinkwrap.engine.tokenizer import estimate_tokens
 from shrinkwrap.engine.privacy import SecretRedactor
-from shrinkwrap.engine.retrieval_buffer import global_buffer
+from shrinkwrap.engine.retrieval_buffer import RetrievalBuffer
 
 def test_tokenizer():
     tokens = estimate_tokens("Hello world this is a test string for token counting.")
@@ -14,8 +14,9 @@ def test_secret_redactor():
     sanitized = redactor.sanitize(text)
     assert "[REDACTED" in sanitized
 
-def test_compaction_engine_json():
-    compactor = CompactionEngine(token_threshold=50)
+def test_compaction_engine_json(tmp_path):
+    compactor = CompactionEngine(token_threshold=50, record_stats=False,
+                                buffer=RetrievalBuffer(tmp_path / "buffer"))
     data = [{"id": i, "name": f"item_{i}"} for i in range(100)]
     compacted, strat, orig_t, comp_t = compactor.compact(data, source_type="mcp")
     assert strat == "structured_summary"
@@ -23,11 +24,12 @@ def test_compaction_engine_json():
     assert compacted["_shrinkwrap_summary"] is True
     assert "ref_handle" in compacted
 
-def test_retrieval_buffer():
+def test_retrieval_buffer(tmp_path):
+    buffer = RetrievalBuffer(tmp_path / "buffer")
     data = {"secret_payload": "full data"}
-    ref = global_buffer.store(data)
+    ref = buffer.store(data)
     assert ref.startswith("sw-ref:")
-    fetched = global_buffer.fetch(ref)
+    fetched = buffer.fetch(ref)
     assert fetched == data
 
 def test_session_tracker(tmp_path):

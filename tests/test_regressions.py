@@ -153,7 +153,7 @@ def test_benchmark_does_not_record_synthetic_events(monkeypatch):
     assert run_benchmark_suite()["summary"]["total_cases"] == 7
 
 
-def test_stdio_proxy_exits_with_child_status_after_stdin_eof():
+def test_stdio_proxy_exits_with_child_status_after_stdin_eof(tmp_path):
     server = (
         "import json,sys; sys.stdin.readline(); "
         "print(json.dumps({'jsonrpc':'2.0','id':1,'result':{'content':[{'type':'text','text':'ok'}]}})); "
@@ -161,7 +161,10 @@ def test_stdio_proxy_exits_with_child_status_after_stdin_eof():
     )
     cmd = [sys.executable, "-m", "shrinkwrap.cli", "wrap-stdio", "--",
            sys.executable, "-c", server]
+    environment = os.environ.copy()
+    environment["SHRINKWRAP_STATE_DIR"] = str(tmp_path / "state")
     result = subprocess.run(cmd, input='{"jsonrpc":"2.0","id":1,"method":"tools/call"}\n',
-                            text=True, capture_output=True, timeout=10)
+                            text=True, capture_output=True, timeout=10, env=environment)
     assert result.returncode == 7
     assert json.loads(result.stdout)["result"]["content"][0]["text"] == "ok"
+    assert json.loads((tmp_path / "state" / "stats.json").read_text())["totals"]["total_invocations"] == 1
