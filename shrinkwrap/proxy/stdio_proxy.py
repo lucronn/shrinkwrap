@@ -44,15 +44,7 @@ class StdioMCPProxy:
                 line = await proc.stdout.readline()
                 if not line:
                     break
-                try:
-                    data = json.loads(line.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    sys.stdout.buffer.write(line)
-                    sys.stdout.buffer.flush()
-                    continue
-                compacted = self.process_jsonrpc(data)
-                out_line = (json.dumps(compacted, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
-                sys.stdout.buffer.write(out_line)
+                sys.stdout.buffer.write(self.process_line(line))
                 sys.stdout.buffer.flush()
 
         input_task = asyncio.create_task(stdin_loop())
@@ -62,6 +54,21 @@ class StdioMCPProxy:
             input_task.cancel()
             await asyncio.gather(input_task, return_exceptions=True)
         return await proc.wait()
+
+    def process_line(self, line: bytes) -> bytes:
+        # Most protocol messages contain no tool result. Forward their original
+        # bytes without parsing or serializing the entire response again.
+        if b'"result"' not in line or (b'"content"' not in line and b'"structuredContent"' not in line):
+            return line
+        try:
+            data = json.loads(line.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return line
+        if not isinstance(data, dict) or not isinstance(data.get("result"), dict):
+            return line
+        if not transform_tool_result(data["result"], self.compactor, "mcp"):
+            return line
+        return (json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
 
     def process_jsonrpc(self, data: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(data, dict) and isinstance(data.get("result"), dict):

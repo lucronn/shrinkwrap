@@ -12,6 +12,7 @@ from shrinkwrap.engine.privacy import SecretRedactor
 from shrinkwrap.engine.retrieval_buffer import RetrievalBuffer
 from shrinkwrap.proxy.config_manager import ConfigManager
 from shrinkwrap.proxy.http_proxy import HttpMCPProxy
+from shrinkwrap.proxy.stdio_proxy import StdioMCPProxy
 
 
 def test_large_single_line_and_wide_json_are_smaller_and_retrievable(tmp_path):
@@ -76,6 +77,21 @@ def test_http_transform_compacts_json_and_preserves_structured_shape(tmp_path):
     assert result["structuredContent"] == {"api_key": "[REDACTED_SECRET]", "count": 100}
     structured_only = {"result": {"structuredContent": {"token": "secret-value"}}}
     assert proxy.transform_response(structured_only)["result"]["structuredContent"]["token"] == "[REDACTED_SECRET]"
+
+
+def test_stdio_preserves_unchanged_wire_messages(tmp_path):
+    engine = CompactionEngine(token_threshold=400, record_stats=False,
+                              buffer=RetrievalBuffer(tmp_path / "buffer"))
+    proxy = StdioMCPProxy(["unused"], engine)
+    control = b' { "jsonrpc" : "2.0", "id" : 1, "result" : {"protocolVersion":"2025-11-25"} }\n'
+    short_tool = b' { "jsonrpc" : "2.0", "id" : 2, "result" : {"content":[{"type":"text","text":"ok"}]} }\n'
+    assert proxy.process_line(control) is control
+    assert proxy.process_line(short_tool) is short_tool
+
+    long_tool = {"jsonrpc": "2.0", "id": 3,
+                 "result": {"content": [{"type": "text", "text": "x" * 50_000}]}}
+    transformed = json.loads(proxy.process_line((json.dumps(long_tool) + "\n").encode()))
+    assert json.loads(transformed["result"]["content"][0]["text"])["type"] == "text_excerpt"
 
 
 def test_codex_toml_wrap_preserves_comments_and_rollback(tmp_path):
