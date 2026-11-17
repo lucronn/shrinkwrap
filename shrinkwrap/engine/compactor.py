@@ -118,7 +118,7 @@ class CompactionEngine:
                 "schema_keys": keys,
                 "sample_items": sample,
                 "ref_handle": ref_handle,
-                "notice": "Use shrinkwrap fetch with ref_handle to retrieve the stored payload."
+                "notice": "Use shrinkwrap_fetch (stdio) or shrinkwrap fetch (CLI) with ref_handle."
             }, "structured_summary")
         elif isinstance(data, dict):
             keys = list(islice(data, 20))
@@ -130,7 +130,7 @@ class CompactionEngine:
                 "fields": [self._short_line(str(k), 80) for k in keys],
                 "sample_fields": sample,
                 "ref_handle": ref_handle,
-                "notice": "Use shrinkwrap fetch with ref_handle to retrieve the stored payload."
+                "notice": "Use shrinkwrap_fetch (stdio) or shrinkwrap fetch (CLI) with ref_handle."
             }, "structured_summary")
         return ({"_shrinkwrap_summary": True, "raw": self._short_line(str(data)), "ref_handle": ref_handle}, "structured_summary")
 

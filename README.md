@@ -44,7 +44,11 @@ shrinkwrap fetch sw-ref:0123456789ab --pointer /rows/10
 shrinkwrap fetch sw-ref:0123456789ab --pointer /rows --offset 0 --limit 4000
 ```
 
-The handle retrieves the **redacted** payload. `--pointer` selects a JSON value using [RFC 6901](https://www.rfc-editor.org/rfc/rfc6901); `--offset` and `--limit` return a bounded character chunk with `next_offset` for paging. Chunks of an object or array are fragments of its serialized JSON and can be joined before parsing. Retrieval is available from the local CLI; an agent needs access to that CLI to follow a reference. Files live in `~/.shrinkwrap/buffer/`. Large entries that compress well are stored as gzip JSON; existing plain JSON entries remain readable. Entries expire after one hour by default and are removed during periodic cleanup or when an expired handle is fetched. Set `SHRINKWRAP_TTL_SECONDS` to a positive number to change the TTL. Buffer directories and new files are owner-only.
+The handle retrieves the **redacted** payload. `--pointer` selects a JSON value using [RFC 6901](https://www.rfc-editor.org/rfc/rfc6901); `--offset` and `--limit` return a bounded character chunk with `next_offset` for paging. Chunks of an object or array are fragments of its serialized JSON and can be joined before parsing.
+
+The stdio proxy also advertises a `shrinkwrap_fetch` MCP tool when the wrapped server does not already use that name. An agent can call it with `ref_handle` and optional `pointer`, `offset`, and `limit` arguments. It returns up to 4,000 characters by default, with a 16,000-character maximum per call. Follow `next_offset` to read more. The HTTP transformer does not advertise this tool. The [MCP tools specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) defines the discovery and call messages used here.
+
+Files live in `~/.shrinkwrap/buffer/`. Large entries that compress well are stored as gzip JSON; existing plain JSON entries remain readable. Entries expire after one hour by default and are removed during periodic cleanup or when an expired handle is fetched. Set `SHRINKWRAP_TTL_SECONDS` to a positive number to change the TTL. Buffer directories and new files are owner-only.
 
 Redaction handles common token formats, private key blocks, bearer values, and named credential fields. It is best effort. Check outputs before using ShrinkWrap with unusually sensitive data. ShrinkWrap itself sends no payloads or analytics to a remote service.
 
@@ -56,7 +60,7 @@ shrinkwrap gain
 shrinkwrap session --markdown
 ```
 
-`benchmark` runs seven **synthetic** payloads, including single-line and large-field cases that previously expanded. On the current repository version, the suite's heuristic estimate is 54,627 original tokens and 599 compacted tokens, a 98.9% reduction. It uses a character and word heuristic, not a model tokenizer. The corpus and local execution time do not predict savings or latency for your tools. Benchmark runs use a temporary buffer and do not add events to your analytics.
+`benchmark` runs seven **synthetic** payloads, including single-line and large-field cases that previously expanded. The current corpus shows roughly 98.9% reduction by a character and word heuristic, not a model tokenizer. The corpus and local execution time do not predict savings or latency for your tools. Benchmark runs use a temporary buffer and do not add events to your analytics.
 
 `gain` and `session` report estimated tokens saved by actual proxy calls. Financial figures use a fixed `$3.00 / 1M tokens` assumption and are estimates, not billing data.
 
