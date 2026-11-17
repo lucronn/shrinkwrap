@@ -64,6 +64,17 @@ def test_buffer_rejects_invalid_handles_and_expires_files(tmp_path, monkeypatch)
     assert buffer.fetch(ref) is None
 
 
+def test_large_buffer_entries_are_compressed_and_retrievable(tmp_path):
+    buffer = RetrievalBuffer(tmp_path / "buffer")
+    payload = [{"id": i, "message": "repeated payload " * 15} for i in range(5_000)]
+    ref = buffer.store(payload)
+    file_path = buffer.buffer_dir / (ref[7:] + ".json.gz")
+    assert file_path.exists()
+    assert file_path.stat().st_size < len(json.dumps(payload).encode()) / 5
+    assert file_path.stat().st_mode & 0o077 == 0
+    assert buffer.fetch(ref) == payload
+
+
 def test_http_transform_compacts_json_and_preserves_structured_shape(tmp_path):
     engine = CompactionEngine(token_threshold=1, record_stats=False,
                               buffer=RetrievalBuffer(tmp_path / "buffer"))

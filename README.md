@@ -42,7 +42,7 @@ Tool results may also contain `structuredContent`. ShrinkWrap redacts strings in
 shrinkwrap fetch sw-ref:0123456789ab
 ```
 
-The handle retrieves the complete **redacted** payload, not selected records. Retrieval is available from the local CLI; an agent needs access to that CLI to follow a reference. Files live in `~/.shrinkwrap/buffer/`, expire after one hour by default, and are removed during periodic cleanup or when an expired handle is fetched. Set `SHRINKWRAP_TTL_SECONDS` to a positive number to change the TTL. Buffer directories and new files are owner-only.
+The handle retrieves the complete **redacted** payload, not selected records. Retrieval is available from the local CLI; an agent needs access to that CLI to follow a reference. Files live in `~/.shrinkwrap/buffer/`. Large entries that compress well are stored as gzip JSON; existing plain JSON entries remain readable. Entries expire after one hour by default and are removed during periodic cleanup or when an expired handle is fetched. Set `SHRINKWRAP_TTL_SECONDS` to a positive number to change the TTL. Buffer directories and new files are owner-only.
 
 Redaction handles common token formats, private key blocks, bearer values, and named credential fields. It is best effort. Check outputs before using ShrinkWrap with unusually sensitive data. ShrinkWrap itself sends no payloads or analytics to a remote service.
 
