@@ -11,7 +11,7 @@ import sys
 import tempfile
 from collections.abc import MutableMapping
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import tomlkit
 
@@ -34,7 +34,8 @@ class ConfigManager:
                 found.append(p)
         return found
 
-    def wrap_config(self, config_path: Path, dry_run: bool = False) -> Tuple[bool, str]:
+    def wrap_config(self, config_path: Path, dry_run: bool = False,
+                    server_name: Optional[str] = None) -> Tuple[bool, str]:
         if not config_path.exists():
             return False, f"Config file {config_path} does not exist."
 
@@ -48,9 +49,13 @@ class ConfigManager:
         mcp_servers = data.get("mcp_servers") if is_toml else data.get("mcpServers") or data.get("mcp_servers")
         if not isinstance(mcp_servers, MutableMapping) or not mcp_servers:
             return False, f"No MCP server block found in {config_path}."
+        if server_name is not None and server_name not in mcp_servers:
+            return False, f"MCP server {server_name} not found in {config_path}."
 
         modified = False
-        for server_name, server_cfg in mcp_servers.items():
+        for name, server_cfg in mcp_servers.items():
+            if server_name is not None and name != server_name:
+                continue
             if not isinstance(server_cfg, MutableMapping):
                 continue
             command = server_cfg.get("command")
@@ -58,7 +63,7 @@ class ConfigManager:
                 continue  # Skip remote/URL servers or already wrapped servers
             args = server_cfg.get("args", [])
             if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
-                return False, f"Invalid args for MCP server {server_name} in {config_path}."
+                return False, f"Invalid args for MCP server {name} in {config_path}."
             if list(args[:4]) == ["-m", "shrinkwrap.cli", "wrap-stdio", "--"]:
                 continue
 
@@ -69,11 +74,12 @@ class ConfigManager:
             server_cfg["args"] = new_args
             modified = True
 
+        scope = f"server {server_name}" if server_name is not None else "servers"
         if not modified:
-            return True, f"All servers in {config_path} are already wrapped by ShrinkWrap."
+            return True, f"No changes needed for {scope} in {config_path}."
 
         if dry_run:
-            return True, f"Dry-run: Would wrap servers in {config_path}."
+            return True, f"Dry-run: Would wrap {scope} in {config_path}."
 
         serialized = tomlkit.dumps(data) if is_toml else json.dumps(data, indent=2) + "\n"
         # Keep a safety backup and replace the config atomically.
@@ -89,7 +95,7 @@ class ConfigManager:
             if os.path.exists(tmp_name):
                 os.unlink(tmp_name)
 
-        return True, f"Successfully wrapped MCP servers in {config_path}. Backup saved to {backup_path.name}."
+        return True, f"Successfully wrapped MCP {scope} in {config_path}. Backup saved to {backup_path.name}."
 
     def rollback_config(self, config_path: Path) -> Tuple[bool, str]:
         backup_path = config_path.with_suffix(config_path.suffix + ".swbak")

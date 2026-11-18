@@ -159,6 +159,7 @@ def main():
     wrap_p = subparsers.add_parser("wrap", help="Wrap MCP server commands in a specific config file")
     wrap_p.add_argument("config_file", type=str, help="Path to configuration file")
     wrap_p.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
+    wrap_p.add_argument("--server", help="Wrap only this named MCP server")
 
     # rollback
     rollback_p = subparsers.add_parser("rollback", help="Restore configuration file from backup")
@@ -243,7 +244,8 @@ def main():
 
     elif args.subcommand == "wrap":
         cm = ConfigManager()
-        ok, msg = cm.wrap_config(Path(args.config_file), dry_run=args.dry_run)
+        ok, msg = cm.wrap_config(Path(args.config_file), dry_run=args.dry_run,
+                                 server_name=args.server)
         print(msg)
         if not ok:
             sys.exit(1)

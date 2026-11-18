@@ -22,7 +22,7 @@ The virtual environment works with a system Python that restricts direct package
 shrinkwrap rollback ~/.codex/config.toml
 ```
 
-For a single server, use `shrinkwrap wrap <config-file> [--dry-run]`. Auto-wrapping uses the Python executable running ShrinkWrap, so a desktop client does not need `shrinkwrap` on its own PATH. [Codex's MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) describes the `config.toml` server format.
+For a single server, use `shrinkwrap wrap <config-file> --server <name> [--dry-run]`. Without `--server`, `wrap` handles all local servers in the file. Auto-wrapping uses the Python executable running ShrinkWrap, so a desktop client does not need `shrinkwrap` on its own PATH. [Codex's MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) describes the `config.toml` server format.
 
 You can also run the proxy directly:
 
@@ -69,7 +69,7 @@ shrinkwrap session --markdown
 | Command | Purpose |
 | --- | --- |
 | `shrinkwrap install [--dry-run]` | Discover and wrap supported local MCP configs |
-| `shrinkwrap wrap <file> [--dry-run]` | Wrap one config file |
+| `shrinkwrap wrap <file> [--server name] [--dry-run]` | Wrap a config file or one named server |
 | `shrinkwrap rollback <file>` | Restore its `.swbak` backup |
 | `shrinkwrap wrap-stdio -- <command> [args]` | Proxy a stdio MCP server |
 | `shrinkwrap fetch <sw-ref:handle>` | Retrieve a buffered redacted payload |

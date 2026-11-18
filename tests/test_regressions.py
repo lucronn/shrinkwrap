@@ -131,6 +131,27 @@ def test_codex_toml_wrap_preserves_comments_and_rollback(tmp_path):
     assert path.read_text() == original
 
 
+def test_codex_toml_wrap_only_selected_server(tmp_path):
+    path = tmp_path / "config.toml"
+    original = (
+        "[mcp_servers.first]\ncommand = 'node'\nargs = ['one.js']\n"
+        "[mcp_servers.second]\ncommand = 'python'\nargs = ['two.py']\n"
+    )
+    path.write_text(original)
+    manager = ConfigManager()
+    assert not manager.wrap_config(path, server_name="missing")[0]
+    assert path.read_text() == original
+    assert manager.wrap_config(path, server_name="first")[0]
+    parsed = tomlkit.parse(path.read_text())["mcp_servers"]
+    assert parsed["first"]["command"] == sys.executable
+    assert list(parsed["first"]["args"]) == [
+        "-m", "shrinkwrap.cli", "wrap-stdio", "--", "node", "one.js"
+    ]
+    assert parsed["second"]["command"] == "python"
+    assert list(parsed["second"]["args"]) == ["two.py"]
+    assert path.with_suffix(".toml.swbak").read_text() == original
+
+
 def test_json_config_wraps_local_server_only(tmp_path):
     path = tmp_path / "mcp.json"
     path.write_text(json.dumps({"mcpServers": {
