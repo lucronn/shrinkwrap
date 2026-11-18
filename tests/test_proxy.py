@@ -2,9 +2,12 @@ import pytest
 from shrinkwrap.proxy.stdio_proxy import StdioMCPProxy
 from shrinkwrap.proxy.http_proxy import HttpMCPProxy
 from shrinkwrap.proxy.config_manager import ConfigManager
+from shrinkwrap.engine.compactor import CompactionEngine
+from shrinkwrap.engine.retrieval_buffer import RetrievalBuffer
 
-def test_stdio_proxy_jsonrpc_compaction():
-    proxy = StdioMCPProxy(["echo"])
+def test_stdio_proxy_jsonrpc_compaction(tmp_path):
+    proxy = StdioMCPProxy(["echo"], CompactionEngine(record_stats=False,
+                          buffer=RetrievalBuffer(tmp_path / "buffer")))
     payload = {
         "jsonrpc": "2.0",
         "id": 1,

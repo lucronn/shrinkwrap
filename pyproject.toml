@@ -4,13 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "shrinkwrap-cli"
-version = "0.1.4"
-description = "Drop-in 90%+ Token Compaction Proxy for MCP & AI Agent Tools"
+version = "0.1.5"
+description = "Local stdio MCP tool-result compaction with retrievable references"
 readme = "README.md"
 authors = [{ name = "ShrinkWrap Maintainers" }]
 license = "MIT"
 requires-python = ">=3.9"
-dependencies = []
+dependencies = ["tomlkit>=0.13,<1"]
+
+[project.urls]
+Repository = "https://github.com/lucronn/shrinkwrap"
+Issues = "https://github.com/lucronn/shrinkwrap/issues"
+Changelog = "https://github.com/lucronn/shrinkwrap/blob/main/CHANGELOG.md"
 
 [project.scripts]
 shrinkwrap = "shrinkwrap.cli:main"

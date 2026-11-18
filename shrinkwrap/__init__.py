@@ -1,10 +1,9 @@
 """
-ShrinkWrap: Universal Token Compaction Proxy for MCP & AI Agent Tools.
-Cuts tool token payloads by 90%+ before context ingestion while preserving exact data retrieval.
+ShrinkWrap: local compaction of MCP tool result text with TTL-backed retrieval.
 """
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 
-__coverage_status__ = "shell+mcp-proxy"
-__universal_status__ = "BLOCKED (Requires Codex host pre-context transform hook)"
+__coverage_status__ = "stdio MCP proxy; HTTP response transformer library"
+__universal_status__ = "unavailable (requires host-level integration)"

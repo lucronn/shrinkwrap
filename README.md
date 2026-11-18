@@ -1,195 +1,93 @@
 # ShrinkWrap
 
-ShrinkWrap is a protocol-level transport proxy and compaction engine for Model Context Protocol (MCP) tool outputs and CLI execution streams. It intercepts responses prior to context ingestion, reducing token consumption by over 90% while maintaining exact data access through persistent reference handles (`sw-ref:`).
+ShrinkWrap is a local compaction proxy for text returned by MCP tools. It replaces large text blocks with a bounded summary and a `sw-ref:` handle. The full, redacted payload is kept in a local buffer for later retrieval.
 
----
+The command line provides a working **stdio MCP proxy**. The Python package also exposes an HTTP response transformer; it does not start an HTTP listener or intercept arbitrary shell commands.
 
-## Quick Start & Summary
-
-### AI Agent Setup (Copy & Paste)
-Copy and paste this instruction into your AI coding assistant (Antigravity, Claude Code, Cursor, Codex, Windsurf):
-
-```text
-Please install and set up ShrinkWrap on my computer to reduce my MCP and tool token usage by ~90%:
-1. Install shrinkwrap-cli: `pip install shrinkwrap-cli`
-2. Auto-wrap active MCP configs: run `shrinkwrap install`
-3. Verify setup: run `shrinkwrap status` and `shrinkwrap benchmark`
-4. At the end of every run or task, run `shrinkwrap session --markdown` and include token savings in your final output.
-```
-
-### Manual Installation
-```bash
-pip install shrinkwrap-cli
-shrinkwrap install
-```
-
-### Terminal Side-by-Side Visual Comparison
-
-![ShrinkWrap Terminal Execution Demo](assets/terminal_demo.gif)
-
-
-### Benchmark Summary & Token Savings
-
-
-Measured across production developer payloads:
-
-| Payload Benchmark | Tool Source | Strategy | Original Tokens | Compacted Tokens | Token Reduction |
-|---|---|---|---|---|---|
-| `postgres_query_result` (500 SQL rows) | MCP Server | `structured_summary` | 28,743 | 178 | **99.38%** |
-| `web_scrape_html_extract` (API docs) | MCP Server | `structured_summary` | 9,962 | 251 | **97.48%** |
-| `github_pr_payload` (PR diff & comments) | MCP Server | `structured_summary` | 1,658 | 95 | **94.27%** |
-| `python_real_traceback` (100-line trace) | Shell / CLI | `error_summary` | 2,831 | 192 | **93.22%** |
-| **Combined Corpus** | **All Tools** | **Schema-Aware** | **52,428** | **9,998** | **80.93% – 91.8%** |
-
-*Average execution overhead per tool invocation: < 35 ms.*
-
----
-
-## Overview & Architecture
-
-Large language models operating in agentic tool-use loops frequently process bloated responses from database queries, log dumps, and API calls. These raw payloads consume context space, increase latency, and degrade model reasoning over extended sessions.
-
-ShrinkWrap sits transparently on the MCP transport layer (`stdio` and `HTTP`), applying schema-aware transformations to tool responses before they enter model context. Raw payloads are stored in a local TTL-managed buffer, allowing models to query exact data subsets on demand.
-
-```
-┌─────────────────┐             ┌─────────────────────┐             ┌─────────────────────┐
-│   MCP Client    │ ─── Request ──► │  ShrinkWrap Proxy   │ ─── Request ──► │  Target MCP Server  │
-│ (Codex/Claude)  │ ◄── Compact ─── │ (Stdio/HTTP Proxy)  │ ◄── Response ── │   (Postgres/Git)    │
-└─────────────────┘      Payload    └─────────────────────┘      Raw      └─────────────────────┘
-                                               │               Payload
-                                               ▼
-                                      ┌───────────────────┐
-                                      │ Disk/TTL Buffer   │
-                                      │ ~/.shrinkwrap/    │ (sw-ref:a1b2c3d4)
-                                      └───────────────────┘
-```
-
----
-
-## Compaction Strategies
-
-ShrinkWrap applies five deterministic strategies based on structural analysis:
-
-| Strategy | Trigger Condition | Output Schema / Format |
-|---|---|---|
-| `structured_summary` | Valid JSON objects or arrays exceeding threshold | Keys, record/item counts, array types, representative sample objects, and `sw-ref:` handle. |
-| `text_excerpt` | Standard text logs or multi-line command output | Head (first 5 lines), tail (last 5 lines), total line count, and `sw-ref:` handle. |
-| `error_summary` | Stack traces containing `Traceback` or `Exception` | Isolated error types, failure messages, key stack frames, and `sw-ref:` handle. |
-| `metadata_only` | Binary streams or media payloads | MIME type, byte size, hash digest, and `sw-ref:` handle. |
-| `pass_through` | Payload within token threshold | Original payload returned unmodified. |
-
----
-
-## Retrieval Buffer Semantics
-
-When a payload is compacted, ShrinkWrap generates a reference handle in the format `sw-ref:<12-char-hash>`.
-
-### Data Retrieval Protocol
-Agents or users can inspect or retrieve original raw payloads at any time without re-executing tool calls:
+## Install and configure
 
 ```bash
-# Retrieve full raw payload by handle
-shrinkwrap fetch sw-ref:a1b2c3d4
-```
-
-* **Storage Path**: `~/.shrinkwrap/buffer/<hash>.json`
-* **Default TTL**: 3600 seconds (configurable via `SHRINKWRAP_TTL_SECONDS`).
-* **Cleanup**: Automatic garbage collection of expired buffer files on every read/write operation.
-
----
-
-## Security & Privacy Model
-
-ShrinkWrap incorporates an inline redactor (`SecretRedactor`) evaluated prior to buffer storage and context dispatch.
-
-### Redaction Rules
-* **API Keys & Tokens**: Matches OpenAI (`sk-`), GitHub (`ghp_`), GitLab (`glpat-`), AWS (`AKIA`), and standard bearer token formats.
-* **Private Credentials**: Identifies RSA/EC/OpenSSH private key blocks and masks them as `[REDACTED_PRIVATE_KEY]`.
-* **Telemetry**: ShrinkWrap operates entirely offline. No payload data, metrics, or telemetry are transmitted off-device.
-
----
-
-## Auto-Configuration & Rollback
-
-### Discover & Wrap Local MCP Clients
-Discover and wrap active MCP server configurations across supported clients (`~/.codex/config.json`, Claude Desktop, Cursor):
-
-```bash
-# Dry run preview (non-destructive)
+python3 -m venv ~/.local/share/shrinkwrap/venv
+~/.local/share/shrinkwrap/venv/bin/python -m pip install shrinkwrap-cli
+export PATH="$HOME/.local/share/shrinkwrap/venv/bin:$PATH"
 shrinkwrap install --dry-run
-
-# Apply configuration wrapping
 shrinkwrap install
 ```
 
-### Configuration Modification Example
+The virtual environment works with a system Python that restricts direct package installs. Put its `bin` directory on PATH in future shells to use the `shrinkwrap` command there.
 
-`~/.codex/config.json` before wrapping:
-```json
-{
-  "mcpServers": {
-    "postgres": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/db"]
-    }
-  }
-}
-```
-
-`~/.codex/config.json` after `shrinkwrap install`:
-```json
-{
-  "mcpServers": {
-    "postgres": {
-      "command": "shrinkwrap",
-      "args": ["wrap-stdio", "--", "npx", "-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/db"]
-    }
-  }
-}
-```
-
-### Safety Rollback
-Restore configuration files from safety backups (`.swbak`) at any time:
-```bash
-shrinkwrap rollback ~/.codex/config.json
-```
-
----
-
-## Session Token Analytics & Agent End-of-Run Reporting
-
-AI agents operating in multi-step task loops can report their exact tokens saved, reduction percentages, and estimated financial savings at the conclusion of a task.
+`install` wraps local stdio server commands in supported MCP client configuration files. It supports Codex's `~/.codex/config.toml` and JSON configurations for Claude Desktop, Cursor, Gemini, and Antigravity. Remote URL servers are left alone. For each modified file, ShrinkWrap saves a `.swbak` copy. You can restore it with:
 
 ```bash
-# Print active run session summary
-shrinkwrap session
+shrinkwrap rollback ~/.codex/config.toml
+```
 
-# Generate agent-ready Markdown snippet for final user turn responses
+For a single server, use `shrinkwrap wrap <config-file> --server <name> [--dry-run]`. Without `--server`, `wrap` handles all local servers in the file. Auto-wrapping uses the Python executable running ShrinkWrap, so a desktop client does not need `shrinkwrap` on its own PATH. [Codex's MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) describes the `config.toml` server format.
+
+You can also run the proxy directly:
+
+```bash
+shrinkwrap wrap-stdio -- npx -y @modelcontextprotocol/server-filesystem /path/to/files
+```
+
+## What gets compacted
+
+ShrinkWrap examines MCP tool result **text** blocks. JSON arrays and objects get a count, a bounded sample, and a reference handle. Long text gets bounded head and tail excerpts; tracebacks get selected error lines. Small output passes through after redaction. A candidate summary is used only when its estimated token count is smaller than the redacted output.
+
+Tool results may also contain `structuredContent`. ShrinkWrap redacts strings in that field but does not compact it, since clients may validate it against a tool's output schema. Redaction can change values in a way that strict schema validators reject. Images, audio, and other non-text content blocks pass through. These cases can limit total response savings. See the [MCP tool result documentation](https://ts.sdk.modelcontextprotocol.io/v2/clients/calling) for the distinction between `content` and `structuredContent`.
+
+## Retrieve a payload
+
+```bash
+shrinkwrap fetch sw-ref:0123456789ab
+shrinkwrap fetch sw-ref:0123456789ab --pointer /rows/10
+shrinkwrap fetch sw-ref:0123456789ab --pointer /rows --offset 0 --limit 4000
+```
+
+The handle retrieves the **redacted** payload. `--pointer` selects a JSON value using [RFC 6901](https://www.rfc-editor.org/rfc/rfc6901); `--offset` and `--limit` return a bounded character chunk with `next_offset` for paging. Chunks of an object or array are fragments of its serialized JSON and can be joined before parsing.
+
+The stdio proxy also advertises a `shrinkwrap_fetch` MCP tool when the wrapped server does not already use that name. An agent can call it with `ref_handle` and optional `pointer`, `offset`, and `limit` arguments. It returns up to 4,000 characters by default, with a 16,000-character maximum per call. Follow `next_offset` to read more. The HTTP transformer does not advertise this tool. The [MCP tools specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) defines the discovery and call messages used here.
+
+Files live in `~/.shrinkwrap/buffer/` by default. Set `SHRINKWRAP_STATE_DIR` before launching the proxy and CLI to put the buffer and analytics in another directory. Large entries that compress well are stored as gzip JSON; existing plain JSON entries remain readable. Entries expire after one hour by default and are removed during periodic cleanup or when an expired handle is fetched. Set `SHRINKWRAP_TTL_SECONDS` to a positive number to change the TTL. Buffer directories and new files are owner-only.
+
+Redaction handles common token formats, private key blocks, bearer values, and named credential fields. It is best effort. Check outputs before using ShrinkWrap with unusually sensitive data. ShrinkWrap itself sends no payloads or analytics to a remote service.
+
+## Measure your workload
+
+```bash
+shrinkwrap benchmark
+shrinkwrap gain
 shrinkwrap session --markdown
 ```
 
-#### Output Example (`--markdown`):
-> **ShrinkWrap Session Savings**: **42,478 tokens saved** (81.02% reduction across 5 tool invocations, ~$0.1274 USD saved).
+`benchmark` runs seven **synthetic** payloads, including single-line and large-field cases that previously expanded. The current corpus shows roughly 98.9% reduction by a character and word heuristic, not a model tokenizer. The corpus and local execution time do not predict savings or latency for your tools. Benchmark runs use a temporary buffer and do not add events to your analytics.
 
----
+`gain` and `session` report estimated tokens saved by actual proxy calls. Financial figures use a fixed `$3.00 / 1M tokens` assumption and are estimates, not billing data.
 
-## Command Reference
+## Commands
 
-| Command | Usage | Description |
-|---|---|---|
-| `shrinkwrap install` | `shrinkwrap install [--dry-run]` | Auto-discover and wrap local MCP server configurations |
-| `shrinkwrap wrap-stdio` | `shrinkwrap wrap-stdio -- <cmd> [args]` | Execute stdio proxy for target server command |
-| `shrinkwrap session` | `shrinkwrap session [--markdown] [--json]` | Report token usage and savings for the current agent session |
-| `shrinkwrap gain` | `shrinkwrap gain [--history] [--json] [--reset]` | Display cumulative token savings analytics and harness breakdowns |
-| `shrinkwrap fetch` | `shrinkwrap fetch <sw-ref:handle>` | Retrieve raw payload from memory buffer |
-| `shrinkwrap status` | `shrinkwrap status` | Display system status and capability gate information |
-| `shrinkwrap benchmark` | `shrinkwrap benchmark` | Run benchmark test suite |
-| `shrinkwrap gap-report` | `shrinkwrap gap-report` | Print Codex host interception gap report |
-| `shrinkwrap rollback` | `shrinkwrap rollback <path>` | Restore configuration file from backup |
+| Command | Purpose |
+| --- | --- |
+| `shrinkwrap install [--dry-run]` | Discover and wrap supported local MCP configs |
+| `shrinkwrap wrap <file> [--server name] [--dry-run]` | Wrap a config file or one named server |
+| `shrinkwrap rollback <file>` | Restore its `.swbak` backup |
+| `shrinkwrap wrap-stdio -- <command> [args]` | Proxy a stdio MCP server |
+| `shrinkwrap fetch <sw-ref:handle>` | Retrieve a buffered redacted payload |
+| `shrinkwrap benchmark` | Run the synthetic compaction suite |
+| `shrinkwrap gain [--history] [--json]` | Show cumulative estimated savings |
+| `shrinkwrap session [--markdown] [--json]` | Show session estimated savings |
+| `shrinkwrap status` | Show installed version and available components |
 
----
+## Development
+
+See [Contributing](https://github.com/lucronn/shrinkwrap/blob/main/CONTRIBUTING.md) for tests and releases, the [architecture guide](https://github.com/lucronn/shrinkwrap/blob/main/docs/architecture.md) for message and buffer behavior, and the [changelog](https://github.com/lucronn/shrinkwrap/blob/main/CHANGELOG.md) for release notes.
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e . pytest
+.venv/bin/python -m pytest -q
+```
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
-
+MIT. See [LICENSE](https://github.com/lucronn/shrinkwrap/blob/main/LICENSE).

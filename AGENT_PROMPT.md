@@ -1,14 +1,10 @@
-# 🤖 Copy-Paste Prompt for AI Agents (Antigravity, Claude Code, Cursor, Codex, Windsurf)
-
-Copy and paste the exact prompt below into your AI coding assistant to auto-install and configure **ShrinkWrap** on your machine:
+# Setup prompt for an AI coding assistant
 
 ```text
-Please install and set up ShrinkWrap on my computer to reduce my MCP and tool token usage by ~90%:
+Please set up ShrinkWrap for my local stdio MCP servers:
 
-1. Install shrinkwrap-cli: `pip install shrinkwrap-cli` (or `uv tool install shrinkwrap-cli`).
-
-
-2. Run `shrinkwrap install` to auto-discover and wrap all active local MCP client configurations (~/.codex/config.json, Claude Desktop, Cursor).
-3. Run `shrinkwrap status` and `shrinkwrap benchmark` to verify the installation and show active token savings.
-4. At the end of every run or task, run `shrinkwrap session --markdown` and include the token savings summary in your final response.
+1. Install the `shrinkwrap-cli` package in an appropriate Python environment.
+2. Run `shrinkwrap install --dry-run` and show which local MCP configurations and servers it would change. Codex uses `~/.codex/config.toml`.
+3. Run `shrinkwrap install`, then verify the wrapped servers still start, their original tools work, and `shrinkwrap_fetch` appears in their tool list. ShrinkWrap saves a `.swbak` copy of each modified config.
+4. Run `shrinkwrap benchmark` for the synthetic corpus and `shrinkwrap session` for estimated savings from real proxy calls. Do not treat the synthetic benchmark as measured savings for my workload.
 ```

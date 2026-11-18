@@ -5,14 +5,26 @@ Records tokens processed, tokens saved, byte reductions, and detailed breakdowns
 
 import os
 import json
+import tempfile
 import time
+from contextlib import contextmanager
+from functools import wraps
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from shrinkwrap.state import state_dir
 
-STATS_DIR = Path.home() / ".shrinkwrap"
+STATS_DIR = state_dir()
 STATS_FILE = STATS_DIR / "stats.json"
 
 EST_USD_PER_1M_TOKENS = 3.00
+
+
+def _with_lock(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._locked():
+            return method(self, *args, **kwargs)
+    return wrapper
 
 def detect_harness() -> str:
     if os.getenv("SHRINKWRAP_HARNESS"):
@@ -37,44 +49,76 @@ class TokenTracker:
         self.stats_path = stats_path
         self._ensure_storage()
 
-    def _ensure_storage(self):
+    @contextmanager
+    def _locked(self):
         self.stats_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = self.stats_path.with_suffix(self.stats_path.suffix + ".lock")
+        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        with os.fdopen(fd, "r+b") as lock_file:
+            if os.name == "nt":
+                import msvcrt
+                lock_file.seek(0, os.SEEK_END)
+                if lock_file.tell() == 0:
+                    lock_file.write(b"\0")
+                    lock_file.flush()
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if os.name == "nt":
+                    lock_file.seek(0)
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    @staticmethod
+    def _initial_data():
+        return {
+            "version": "1.0",
+            "totals": {
+                "total_invocations": 0,
+                "compacted_invocations": 0,
+                "original_tokens": 0,
+                "compacted_tokens": 0,
+                "tokens_saved": 0,
+                "original_bytes": 0,
+                "compacted_bytes": 0,
+                "bytes_saved": 0,
+                "est_usd_saved": 0.0
+            },
+            "by_harness": {},
+            "by_tool": {},
+            "by_session": {},
+            "history": []
+        }
+
+    @_with_lock
+    def _ensure_storage(self):
         if not self.stats_path.exists():
-            initial_data = {
-                "version": "1.0",
-                "totals": {
-                    "total_invocations": 0,
-                    "compacted_invocations": 0,
-                    "original_tokens": 0,
-                    "compacted_tokens": 0,
-                    "tokens_saved": 0,
-                    "original_bytes": 0,
-                    "compacted_bytes": 0,
-                    "bytes_saved": 0,
-                    "est_usd_saved": 0.0
-                },
-                "by_harness": {},
-                "by_tool": {},
-                "by_session": {},
-                "history": []
-            }
-            self._save(initial_data)
+            self._save(self._initial_data())
 
     def _load(self) -> Dict[str, Any]:
         try:
             with open(self.stats_path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
-            self._ensure_storage()
-            with open(self.stats_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return self._initial_data()
 
     def _save(self, data: Dict[str, Any]):
-        tmp_path = self.stats_path.with_suffix(".tmp")
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
-        tmp_path.replace(self.stats_path)
+        fd, tmp_name = tempfile.mkstemp(prefix=self.stats_path.name + ".", suffix=".tmp", dir=self.stats_path.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(json.dumps(data, separators=(",", ":")))
+            os.replace(tmp_name, self.stats_path)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
 
+    @_with_lock
     def record_event(
         self,
         orig_tokens: int,
@@ -146,9 +190,11 @@ class TokenTracker:
 
         self._save(data)
 
+    @_with_lock
     def get_stats(self) -> Dict[str, Any]:
         return self._load()
 
+    @_with_lock
     def get_session_stats(self, session_id: Optional[str] = None) -> Dict[str, Any]:
         session_id = session_id or detect_session_id()
         data = self._load()
@@ -178,9 +224,8 @@ class TokenTracker:
             "est_usd_saved": usd
         }
 
+    @_with_lock
     def reset(self):
-        if self.stats_path.exists():
-            self.stats_path.unlink()
-        self._ensure_storage()
+        self._save(self._initial_data())
 
 global_tracker = TokenTracker()

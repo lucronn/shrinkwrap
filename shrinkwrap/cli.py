@@ -14,6 +14,7 @@ from shrinkwrap.proxy.config_manager import ConfigManager
 from shrinkwrap.proxy.stdio_proxy import StdioMCPProxy
 from shrinkwrap.engine.tracker import global_tracker
 from shrinkwrap.engine.retrieval_buffer import global_buffer
+from shrinkwrap.engine.retrieval import select_pointer, retrieve_chunk
 from shrinkwrap import __version__, __coverage_status__, __universal_status__
 
 def print_gain_report(history: bool = False, reset: bool = False, output_json: bool = False):
@@ -141,6 +142,9 @@ def main():
     # fetch
     fetch_p = subparsers.add_parser("fetch", help="Retrieve uncompacted payload from memory by reference handle")
     fetch_p.add_argument("ref_handle", type=str, help="Reference handle (e.g. sw-ref:a1b2c3d4)")
+    fetch_p.add_argument("--pointer", default="", help="RFC 6901 JSON Pointer into a buffered object or array")
+    fetch_p.add_argument("--offset", type=int, help="Character offset for a bounded chunk")
+    fetch_p.add_argument("--limit", type=int, help="Maximum characters to return (1-16000)")
 
     # benchmark
     subparsers.add_parser("benchmark", help="Execute benchmark test suite across sample payloads")
@@ -155,6 +159,7 @@ def main():
     wrap_p = subparsers.add_parser("wrap", help="Wrap MCP server commands in a specific config file")
     wrap_p.add_argument("config_file", type=str, help="Path to configuration file")
     wrap_p.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
+    wrap_p.add_argument("--server", help="Wrap only this named MCP server")
 
     # rollback
     rollback_p = subparsers.add_parser("rollback", help="Restore configuration file from backup")
@@ -170,15 +175,15 @@ def main():
             print("Error: No target command specified for wrap-stdio.", file=sys.stderr)
             sys.exit(1)
         proxy = StdioMCPProxy(cmd_args)
-        asyncio.run(proxy.run())
+        sys.exit(asyncio.run(proxy.run()))
 
     elif args.subcommand == "status":
         print(f"ShrinkWrap System Status")
         print(f"========================")
         print(f"Version:           {__version__}")
         print(f"Coverage Status:   {__coverage_status__}")
-        print(f"Universal Gate:    {__universal_status__}")
-        print("Active Adapters:   shell, stdio_mcp_proxy, http_mcp_proxy")
+        print(f"Host Interception: {__universal_status__}")
+        print("Available:         stdio MCP proxy, HTTP response transformer, shell guidance")
 
     elif args.subcommand in ("gain", "stats"):
         print_gain_report(history=args.history, reset=args.reset, output_json=args.json)
@@ -187,15 +192,22 @@ def main():
         print_session_report(session_id=args.session_id, markdown=args.markdown, output_json=args.json)
 
     elif args.subcommand == "fetch":
-
         data = global_buffer.fetch(args.ref_handle)
         if data is None:
             print(f"Error: Reference handle '{args.ref_handle}' not found or expired.", file=sys.stderr)
             sys.exit(1)
-        if isinstance(data, (dict, list)):
-            print(json.dumps(data, indent=2))
-        else:
-            print(data)
+        try:
+            if args.offset is not None or args.limit is not None:
+                chunk = retrieve_chunk(data, pointer=args.pointer,
+                                       offset=args.offset if args.offset is not None else 0,
+                                       limit=args.limit if args.limit is not None else 4_000)
+                print(json.dumps(chunk, ensure_ascii=False))
+            else:
+                selected = select_pointer(data, args.pointer)
+                print(selected if isinstance(selected, str) else json.dumps(selected, indent=2, ensure_ascii=False))
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
 
     elif args.subcommand == "benchmark":
         res = run_benchmark_suite()
@@ -222,19 +234,28 @@ def main():
         if not configs:
             print("No supported MCP client configuration files detected.")
             sys.exit(0)
+        failed = False
         for c in configs:
             ok, msg = cm.wrap_config(c, dry_run=args.dry_run)
             print(f"[{c.name}] {msg}")
+            failed |= not ok
+        if failed:
+            sys.exit(1)
 
     elif args.subcommand == "wrap":
         cm = ConfigManager()
-        ok, msg = cm.wrap_config(Path(args.config_file), dry_run=args.dry_run)
+        ok, msg = cm.wrap_config(Path(args.config_file), dry_run=args.dry_run,
+                                 server_name=args.server)
         print(msg)
+        if not ok:
+            sys.exit(1)
 
     elif args.subcommand == "rollback":
         cm = ConfigManager()
         ok, msg = cm.rollback_config(Path(args.config_file))
         print(msg)
+        if not ok:
+            sys.exit(1)
 
     else:
         parser.print_help()
