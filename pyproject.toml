@@ -12,6 +12,11 @@ license = "MIT"
 requires-python = ">=3.9"
 dependencies = ["tomlkit>=0.13,<1"]
 
+[project.urls]
+Repository = "https://github.com/lucronn/shrinkwrap"
+Issues = "https://github.com/lucronn/shrinkwrap/issues"
+Changelog = "https://github.com/lucronn/shrinkwrap/blob/main/CHANGELOG.md"
+
 [project.scripts]
 shrinkwrap = "shrinkwrap.cli:main"
 

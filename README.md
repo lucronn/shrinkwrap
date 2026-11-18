@@ -80,7 +80,7 @@ shrinkwrap session --markdown
 
 ## Development
 
-See [Contributing](CONTRIBUTING.md) for tests and releases, the [architecture guide](docs/architecture.md) for message and buffer behavior, and the [changelog](CHANGELOG.md) for release notes.
+See [Contributing](https://github.com/lucronn/shrinkwrap/blob/main/CONTRIBUTING.md) for tests and releases, the [architecture guide](https://github.com/lucronn/shrinkwrap/blob/main/docs/architecture.md) for message and buffer behavior, and the [changelog](https://github.com/lucronn/shrinkwrap/blob/main/CHANGELOG.md) for release notes.
 
 ```bash
 python3 -m venv .venv
@@ -90,4 +90,4 @@ python3 -m venv .venv
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/lucronn/shrinkwrap/blob/main/LICENSE).

@@ -1,0 +1,2 @@
+include AGENT_PROMPT.md CHANGELOG.md CONTRIBUTING.md
+recursive-include docs *.md

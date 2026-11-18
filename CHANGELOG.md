@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.5 (unreleased)
+## 0.1.5 (2026-11-18)
 
 - Bound JSON and text previews and avoid summaries that expand the estimated output.
 - Preserve unchanged stdio responses on the wire and compress large, repetitive buffer entries.
