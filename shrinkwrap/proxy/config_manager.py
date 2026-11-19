@@ -19,8 +19,6 @@ KNOWN_CONFIG_PATHS = [
     Path.home() / ".gemini" / "config" / "mcp_config.json",
     Path.home() / ".gemini" / "mcp_config.json",
     Path.home() / ".antigravity" / "mcp_config.json",
-    Path.home() / ".codex" / "config.toml",
-    Path.home() / ".codex" / "config.json",
     Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
     Path.home() / ".cursor" / "mcp.json",
     Path.home() / ".config" / "claude" / "claude_desktop_config.json",
@@ -29,8 +27,12 @@ KNOWN_CONFIG_PATHS = [
 class ConfigManager:
     def discover_configs(self) -> List[Path]:
         found = []
-        for p in KNOWN_CONFIG_PATHS:
-            if p.exists() and p.is_file():
+        profile = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex").expanduser()
+        candidates = [profile / "config.toml", profile / "config.json", *KNOWN_CONFIG_PATHS]
+        seen = set()
+        for p in candidates:
+            if p.is_file() and p.resolve() not in seen:
+                seen.add(p.resolve())
                 found.append(p)
         return found
 
@@ -52,7 +54,7 @@ class ConfigManager:
         if server_name is not None and server_name not in mcp_servers:
             return False, f"MCP server {server_name} not found in {config_path}."
 
-        modified = False
+        modified = []
         for name, server_cfg in mcp_servers.items():
             if server_name is not None and name != server_name:
                 continue
@@ -72,14 +74,14 @@ class ConfigManager:
             new_args = ["-m", "shrinkwrap.cli", "wrap-stdio", "--", command] + list(args)
             server_cfg["command"] = new_command
             server_cfg["args"] = new_args
-            modified = True
+            modified.append(name)
 
         scope = f"server {server_name}" if server_name is not None else "servers"
         if not modified:
             return True, f"No changes needed for {scope} in {config_path}."
 
         if dry_run:
-            return True, f"Dry-run: Would wrap {scope} in {config_path}."
+            return True, f"Dry-run: Would wrap {', '.join(modified)} in {config_path}."
 
         serialized = tomlkit.dumps(data) if is_toml else json.dumps(data, indent=2) + "\n"
         # Keep a safety backup and replace the config atomically.

@@ -118,7 +118,6 @@ class TokenTracker:
             if os.path.exists(tmp_name):
                 os.unlink(tmp_name)
 
-    @_with_lock
     def record_event(
         self,
         orig_tokens: int,
@@ -131,13 +130,32 @@ class TokenTracker:
         harness: Optional[str] = None,
         session_id: Optional[str] = None
     ):
-        harness = harness or detect_harness()
-        session_id = session_id or detect_session_id()
+        self.record_events([dict(orig_tokens=orig_tokens, comp_tokens=comp_tokens,
+                                 orig_bytes=orig_bytes, comp_bytes=comp_bytes,
+                                 source_class=source_class, tool_name=tool_name, strategy=strategy,
+                                 harness=harness, session_id=session_id)])
+
+    @_with_lock
+    def record_events(self, events):
+        data = self._load()
+        harness = detect_harness()
+        session = detect_session_id()
+        for event in events:
+            self._apply_event(data, event.get("harness") or harness,
+                              event.get("session_id") or session, event)
+        self._save(data)
+
+    @staticmethod
+    def _apply_event(data, harness, session_id, event):
+        orig_tokens = event["orig_tokens"]
+        comp_tokens = event["comp_tokens"]
+        orig_bytes = event["orig_bytes"]
+        comp_bytes = event["comp_bytes"]
+        tool_name = event["tool_name"]
         tokens_saved = max(0, orig_tokens - comp_tokens)
         bytes_saved = max(0, orig_bytes - comp_bytes)
         was_compacted = comp_tokens < orig_tokens
 
-        data = self._load()
         t = data["totals"]
         t["total_invocations"] += 1
         if was_compacted:
@@ -178,8 +196,8 @@ class TokenTracker:
             "harness": harness,
             "session_id": session_id,
             "tool": tool_name,
-            "source_class": source_class,
-            "strategy": strategy,
+            "source_class": event["source_class"],
+            "strategy": event["strategy"],
             "orig_tokens": orig_tokens,
             "compacted_tokens": comp_tokens,
             "tokens_saved": tokens_saved,
@@ -187,8 +205,6 @@ class TokenTracker:
         }
         data["history"].insert(0, history_entry)
         data["history"] = data["history"][:100]
-
-        self._save(data)
 
     @_with_lock
     def get_stats(self) -> Dict[str, Any]:

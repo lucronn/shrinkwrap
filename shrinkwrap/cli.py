@@ -143,11 +143,16 @@ def main():
     fetch_p = subparsers.add_parser("fetch", help="Retrieve uncompacted payload from memory by reference handle")
     fetch_p.add_argument("ref_handle", type=str, help="Reference handle (e.g. sw-ref:a1b2c3d4)")
     fetch_p.add_argument("--pointer", default="", help="RFC 6901 JSON Pointer into a buffered object or array")
+    fetch_p.add_argument("--match", nargs=2, metavar=("FIELD", "VALUE"),
+                         help="Select one array row by an exact string field value")
     fetch_p.add_argument("--offset", type=int, help="Character offset for a bounded chunk")
     fetch_p.add_argument("--limit", type=int, help="Maximum characters to return (1-16000)")
 
     # benchmark
-    subparsers.add_parser("benchmark", help="Execute benchmark test suite across sample payloads")
+    bench = subparsers.add_parser("benchmark", help="Measure compaction and retrieval")
+    bench.add_argument("--stdio", action="store_true", help="Measure complete local stdio exchanges")
+    bench.add_argument("--encoding", help="Tokenizer for the stdio run, e.g. o200k_base")
+    bench.add_argument("--json", action="store_true", help="Print machine-readable measurements")
 
     # gap-report
     subparsers.add_parser("gap-report", help="Display host capability audit and extension proposal")
@@ -196,21 +201,48 @@ def main():
         if data is None:
             print(f"Error: Reference handle '{args.ref_handle}' not found or expired.", file=sys.stderr)
             sys.exit(1)
+        match = dict(zip(("field", "value"), args.match)) if args.match else None
         try:
             if args.offset is not None or args.limit is not None:
-                chunk = retrieve_chunk(data, pointer=args.pointer,
+                chunk = retrieve_chunk(data, pointer=args.pointer, match=match,
                                        offset=args.offset if args.offset is not None else 0,
                                        limit=args.limit if args.limit is not None else 4_000)
                 print(json.dumps(chunk, ensure_ascii=False))
             else:
-                selected = select_pointer(data, args.pointer)
+                selected = select_pointer(data, args.pointer, match)
                 print(selected if isinstance(selected, str) else json.dumps(selected, indent=2, ensure_ascii=False))
         except ValueError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
 
     elif args.subcommand == "benchmark":
+        if args.stdio:
+            from shrinkwrap.benchmarks.stdio import run_stdio_benchmark
+            try:
+                report = asyncio.run(run_stdio_benchmark(args.encoding or "estimate"))
+            except ValueError as exc:
+                parser.error(str(exc))
+            if args.json:
+                print(json.dumps(report, indent=2))
+                return
+            print(f"Stdio benchmark ({report['encoding']}, {report['samples_per_case']} samples per case)")
+            print("Case                 Mode      Median ms   P95 ms   Reply bytes   Text tokens")
+            for name, modes in report["cases"].items():
+                for mode, row in modes.items():
+                    print(f"{name:<20} {mode:<8} {row['median_ms']:>9.3f} {row['p95_ms']:>8.3f}"
+                          f" {row['response_bytes']:>13} {row['returned_text_tokens']:>13}")
+            for task, row in report["retrieval"].items():
+                print(f"{task}: {row['fetch_calls']} fetch(es), {row['returned_text_tokens']} returned text tokens,"
+                      f" {row['fetch_argument_tokens']} fetch argument tokens, {row['round_trip_bytes']} wire bytes")
+            rss = report["proxy_peak_rss_kib"]
+            print(f"Proxy peak RSS: {rss} KiB" if rss is not None else "Proxy peak RSS unavailable")
+            return
+        if args.encoding:
+            parser.error("--encoding requires --stdio")
         res = run_benchmark_suite()
+        if args.json:
+            print(json.dumps(res, indent=2))
+            return
         s = res["summary"]
         print("ShrinkWrap Benchmark Report")
         print("===========================")

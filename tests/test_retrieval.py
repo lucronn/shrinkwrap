@@ -54,6 +54,16 @@ def test_cli_fetch_pointer_and_chunk(tmp_path, monkeypatch, capsys):
     assert chunk["next_offset"] == 4
 
 
+def test_cli_fetch_unknown_row_index(tmp_path, monkeypatch, capsys):
+    buffer = RetrievalBuffer(tmp_path / "buffer")
+    ref = buffer.store({"rows": [{"name": "first"}, {"name": "second", "size": 64}]})
+    monkeypatch.setattr(cli, "global_buffer", buffer)
+    monkeypatch.setattr(sys, "argv", ["shrinkwrap", "fetch", ref, "--pointer", "/rows",
+                                     "--match", "name", "second"])
+    cli.main()
+    assert json.loads(capsys.readouterr().out) == {"name": "second", "size": 64}
+
+
 def test_stdio_advertises_and_serves_bounded_retrieval_tool(tmp_path):
     buffer = RetrievalBuffer(tmp_path / "buffer")
     ref = buffer.store({"rows": ["first", "second"]})
@@ -102,7 +112,7 @@ for line in sys.stdin:
     if request.get("method") == "tools/list":
         result = {"tools": [{"name": "large_output", "inputSchema": {"type": "object"}}]}
     elif request.get("method") == "tools/call":
-        result = {"content": [{"type": "text", "text": "x" * 5000}]}
+        result = {"content": [{"type": "text", "text": "x" * 170000}]}
     else:
         continue
     print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": result}), flush=True)
@@ -137,14 +147,14 @@ main()
         listed = await exchange({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         assert FETCH_TOOL_NAME in [tool["name"] for tool in listed["result"]["tools"]]
         compacted = await exchange({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-                                    "params": {"name": "large_output", "arguments": {}}})
+                                    "params": {"name": "large_output", "arguments": {"query": "q" * 100000}}})
         ref = json.loads(compacted["result"]["content"][0]["text"])["ref_handle"]
         fetched = await exchange({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
                                   "params": {"name": FETCH_TOOL_NAME,
                                              "arguments": {"ref_handle": ref, "limit": 100}}})
         chunk = json.loads(fetched["result"]["content"][0]["text"])
         assert chunk["chunk"] == "x" * 100
-        assert chunk["total_chars"] == 5000
+        assert chunk["total_chars"] == 170000
         assert chunk["next_offset"] == 100
         proc.stdin.close()
         assert await asyncio.wait_for(proc.wait(), timeout=5) == 0

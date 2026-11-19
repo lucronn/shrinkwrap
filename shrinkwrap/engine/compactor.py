@@ -4,6 +4,7 @@ Applies 5 schema-aware compaction strategies based on tool output characteristic
 """
 
 import json
+from contextlib import contextmanager
 from itertools import islice
 from typing import Any, Dict, Tuple
 from shrinkwrap.engine.tokenizer import estimate_tokens
@@ -20,7 +21,20 @@ class CompactionEngine:
         self.record_stats = record_stats
         self.buffer = buffer or global_buffer
 
-    def compact(self, raw_input: Any, source_type: str = "generic", tool_name: str = "generic_tool") -> Tuple[Any, str, int, int]:
+    @contextmanager
+    def batch_stats(self):
+        events = []
+
+        def collect(**event):
+            events.append(event)
+
+        yield collect
+        if events:
+            global_tracker.record_events(events)
+
+    def compact(self, raw_input: Any, source_type: str = "generic", tool_name: str = "generic_tool",
+                *, record_event=None) -> Tuple[Any, str, int, int]:
+        record_event = record_event or global_tracker.record_event
         structured = isinstance(raw_input, (dict, list))
         raw_str = json.dumps(raw_input, ensure_ascii=False, separators=(",", ":")) if structured else str(raw_input)
         if structured:
@@ -39,7 +53,7 @@ class CompactionEngine:
 
         if orig_tokens <= self.token_threshold:
             if self.record_stats:
-                global_tracker.record_event(
+                record_event(
                     orig_tokens=orig_tokens,
                     comp_tokens=pass_tokens,
                     orig_bytes=orig_bytes,
@@ -74,7 +88,7 @@ class CompactionEngine:
                 comp_tokens, comp_bytes = pass_tokens, pass_bytes
 
         if self.record_stats:
-            global_tracker.record_event(
+            record_event(
                 orig_tokens=orig_tokens,
                 comp_tokens=comp_tokens,
                 orig_bytes=orig_bytes,

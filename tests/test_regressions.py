@@ -101,6 +101,7 @@ def test_stdio_preserves_unchanged_wire_messages(tmp_path):
 
     long_tool = {"jsonrpc": "2.0", "id": 3,
                  "result": {"content": [{"type": "text", "text": "x" * 50_000}]}}
+    proxy.process_client_line(b'{"id":3,"method":"tools/call","params":{"name":"example"}}\n')
     transformed = json.loads(proxy.process_line((json.dumps(long_tool) + "\n").encode()))
     assert json.loads(transformed["result"]["content"][0]["text"])["type"] == "text_excerpt"
 

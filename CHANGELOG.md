@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Batch per-block analytics writes and attribute stdio results to the requested tool.
+- Support configurable stdio message sizes, correlate tool replies by request ID, and check paginated tool discovery before advertising retrieval.
+- Find a buffered array row by field value, including when its index is unknown.
+- Measure latency, bytes, tokens, follow-up fetches and peak proxy memory with `benchmark --stdio`.
+- Discover active Codex profiles via `CODEX_HOME` and list eligible servers during dry run.
+
 ## 0.1.5 (2026-11-18)
 
 - Bound JSON and text previews and avoid summaries that expand the estimated output.
