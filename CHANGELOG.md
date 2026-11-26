@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.6 (2026-11-26)
 
 - Batch per-block analytics writes and attribute stdio results to the requested tool.
 - Support configurable stdio message sizes, correlate tool replies by request ID, and check paginated tool discovery before advertising retrieval.
